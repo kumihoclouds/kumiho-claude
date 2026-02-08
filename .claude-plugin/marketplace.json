@@ -1,0 +1,17 @@
+{
+  "name": "kumiho-cowork",
+  "owner": {
+    "name": "Kumiho Clouds",
+    "url": "https://kumiho.io"
+  },
+  "metadata": {
+    "description": "Marketplace for Kumiho Claude plugins."
+  },
+  "plugins": [
+    {
+      "name": "kumiho-memory",
+      "source": "./",
+      "description": "Run local Kumiho MCP with kumiho-memory."
+    }
+  ]
+}
