@@ -9,6 +9,7 @@ This plugin uses one local MCP server:
 ## Required environment
 
 - `KUMIHO_AUTH_TOKEN` (JWT bearer token)
+  - set this in Claude session env (for example `.claude/settings.local.json`)
 
 ## Optional environment
 
@@ -17,6 +18,9 @@ This plugin uses one local MCP server:
 - `KUMIHO_COWORK_HOME` (override runtime directory)
 - `KUMIHO_COWORK_PACKAGE_SPEC` (override package install spec)
 - `KUMIHO_COWORK_DISABLE_LLM_FALLBACK` (disable local no-key LLM fallback mode)
+
+`KUMIHO_SERVER_ENDPOINT` and `KUMIHO_SERVER_ADDRESS` are intentionally ignored by
+the launcher to enforce control-plane discovery routing.
 
 ## Verify connection
 

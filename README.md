@@ -41,6 +41,8 @@ Set these in your Claude environment (recommended in `.claude/settings.local.jso
 ```
 
 `KUMIHO_AUTH_TOKEN` should be a bearer JWT (three-part token format).
+This plugin now requires `KUMIHO_AUTH_TOKEN` and always resolves the gRPC endpoint
+through control-plane discovery.
 
 For higher-quality summarization, set either:
 - `OPENAI_API_KEY` (default provider path), or
@@ -76,6 +78,10 @@ Fix options:
 1. Ensure `KUMIHO_CONTROL_PLANE_URL` points to your deployed control plane.
 2. Ensure `/api/discovery/tenant` is deployed with control-plane token verification.
 
+If you see DNS failures for `us-central.kumiho.cloud`, a stale endpoint override is
+likely present. This plugin ignores `KUMIHO_SERVER_ENDPOINT`/`KUMIHO_SERVER_ADDRESS`
+and resolves endpoint from control-plane on every startup.
+
 ## Local validation and smoke test
 
 From repository root:
@@ -83,6 +89,7 @@ From repository root:
 ```bash
 claude plugin validate ./kumiho-cowork/.claude-plugin/plugin.json
 claude plugin validate ./kumiho-cowork/.claude-plugin/marketplace.json
+export KUMIHO_AUTH_TOKEN=YOUR_KUMIHO_BEARER_JWT
 python ./kumiho-cowork/scripts/run_kumiho_mcp.py --self-test
 ```
 

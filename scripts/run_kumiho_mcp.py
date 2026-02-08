@@ -179,12 +179,17 @@ def _normalize_server_target(raw_target: str) -> str | None:
 
 
 def _bootstrap_server_endpoint() -> None:
-    if os.getenv("KUMIHO_SERVER_ENDPOINT", "").strip() or os.getenv("KUMIHO_SERVER_ADDRESS", "").strip():
-        return
+    preset_endpoint = os.getenv("KUMIHO_SERVER_ENDPOINT", "").strip() or os.getenv("KUMIHO_SERVER_ADDRESS", "").strip()
+    if preset_endpoint:
+        print(
+            "[kumiho-cowork] Ignoring pre-set KUMIHO_SERVER_ENDPOINT/KUMIHO_SERVER_ADDRESS; "
+            "resolving endpoint via control-plane discovery.",
+            file=sys.stderr,
+        )
 
     bearer = _load_bearer_token()
     if not bearer:
-        return
+        raise RuntimeError("KUMIHO_AUTH_TOKEN is required for cowork plugin discovery bootstrap.")
 
     control_plane_url = os.getenv("KUMIHO_CONTROL_PLANE_URL", "").strip() or "https://control.kumiho.cloud"
     discovery_url = _build_discovery_url(control_plane_url)
@@ -247,6 +252,7 @@ def _bootstrap_server_endpoint() -> None:
         raise RuntimeError("Control-plane discovery response missing gRPC target.")
 
     os.environ["KUMIHO_SERVER_ENDPOINT"] = resolved_target
+    os.environ.pop("KUMIHO_SERVER_ADDRESS", None)
     print(
         f"[kumiho-cowork] Resolved KUMIHO_SERVER_ENDPOINT={resolved_target} via discovery bootstrap.",
         file=sys.stderr,
