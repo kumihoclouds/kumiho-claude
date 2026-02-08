@@ -10,6 +10,9 @@ import os
 import shlex
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 import venv
 from pathlib import Path
 
@@ -94,13 +97,11 @@ def _ensure_runtime() -> Path:
 
 def _warn_auth() -> None:
     auth_token = os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
-    firebase_token = os.getenv("KUMIHO_FIREBASE_ID_TOKEN", "").strip()
-    token_file = os.getenv("KUMIHO_AUTH_TOKEN_FILE", "").strip()
-    if auth_token or firebase_token or token_file:
+    if auth_token:
         return
     print(
-        "[kumiho-cowork] Warning: no auth token env is set. "
-        "The server may rely on cached auth from kumiho-auth login.",
+        "[kumiho-cowork] Warning: KUMIHO_AUTH_TOKEN is not set. "
+        "Memory and graph operations will fail until a token is provided.",
         file=sys.stderr,
     )
 
@@ -121,65 +122,137 @@ def _decode_jwt_claims(token: str) -> dict | None:
     return None
 
 
-def _is_control_plane_token(claims: dict) -> bool:
-    if isinstance(claims.get("tenant_id"), str):
-        return True
-    iss = claims.get("iss")
-    if isinstance(iss, str) and ("control.kumiho.cloud" in iss or "kumiho.io/control-plane" in iss):
-        return True
-    aud = claims.get("aud")
-    if isinstance(aud, str) and aud.startswith("kumiho-server"):
-        return True
-    return False
-
-
-def _is_firebase_id_token(claims: dict) -> bool:
-    iss = claims.get("iss")
-    if isinstance(iss, str) and iss.startswith("https://securetoken.google.com/"):
-        return True
-    firebase = claims.get("firebase")
-    return isinstance(firebase, dict)
-
-
-def _normalize_token_envs() -> None:
+def _validate_auth_token() -> None:
     auth_token = os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
-    firebase_token = os.getenv("KUMIHO_FIREBASE_ID_TOKEN", "").strip()
-
-    if firebase_token and not auth_token:
-        os.environ["KUMIHO_AUTH_TOKEN"] = firebase_token
-        print(
-            "[kumiho-cowork] KUMIHO_AUTH_TOKEN is not set; using KUMIHO_FIREBASE_ID_TOKEN for bearer auth.",
-            file=sys.stderr,
-        )
-        return
-
-    if not auth_token or firebase_token:
+    if not auth_token:
         return
 
     claims = _decode_jwt_claims(auth_token)
-    if claims and _is_firebase_id_token(claims):
-        os.environ["KUMIHO_FIREBASE_ID_TOKEN"] = auth_token
+    if claims:
+        return
+
+    print(
+        "[kumiho-cowork] Warning: KUMIHO_AUTH_TOKEN does not look like a JWT. "
+        "Use a dashboard-minted Kumiho API token.",
+        file=sys.stderr,
+    )
+
+
+def _load_bearer_token() -> str:
+    return os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
+
+
+def _build_discovery_url(base_url: str) -> str:
+    base = base_url.rstrip("/")
+    if base.endswith("/api/discovery/tenant"):
+        return base
+    if base.endswith("/api/discovery"):
+        return f"{base}/tenant"
+    if base.endswith("/api"):
+        return f"{base}/discovery/tenant"
+    return f"{base}/api/discovery/tenant"
+
+
+def _normalize_server_target(raw_target: str) -> str | None:
+    target = raw_target.strip()
+    if not target:
+        return None
+
+    if "://" in target:
+        parsed = urllib.parse.urlparse(target)
+        if not parsed.hostname:
+            return None
+        scheme = parsed.scheme.lower()
+        port = parsed.port
+        if port is None:
+            if scheme in {"https", "grpcs"}:
+                port = 443
+            elif scheme in {"http", "grpc"}:
+                port = 80
+            else:
+                port = 443
+        return f"{parsed.hostname}:{port}"
+
+    if "/" in target:
+        target = target.split("/", 1)[0]
+    return target or None
+
+
+def _bootstrap_server_endpoint() -> None:
+    if os.getenv("KUMIHO_SERVER_ENDPOINT", "").strip() or os.getenv("KUMIHO_SERVER_ADDRESS", "").strip():
+        return
+
+    bearer = _load_bearer_token()
+    if not bearer:
+        return
+
+    control_plane_url = os.getenv("KUMIHO_CONTROL_PLANE_URL", "").strip() or "https://control.kumiho.cloud"
+    discovery_url = _build_discovery_url(control_plane_url)
+    tenant_hint = os.getenv("KUMIHO_TENANT_HINT", "").strip()
+
+    payload: dict[str, str] = {}
+    if tenant_hint:
+        payload["tenant_hint"] = tenant_hint
+
+    request = urllib.request.Request(
+        discovery_url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {bearer}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            body_text = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8")
+        except Exception:
+            detail = ""
+        detail = detail.strip().replace("\n", " ")
+        if detail:
+            detail = f" {detail[:160]}"
         print(
-            "[kumiho-cowork] KUMIHO_AUTH_TOKEN looks like Firebase ID token; mirroring to KUMIHO_FIREBASE_ID_TOKEN.",
+            f"[kumiho-cowork] Discovery bootstrap skipped ({exc.code}).{detail}",
             file=sys.stderr,
         )
         return
-
-    if claims and _is_control_plane_token(claims):
-        print(
-            "[kumiho-cowork] KUMIHO_AUTH_TOKEN looks like a control-plane token. "
-            "If your control plane supports service-token auth for /api/memory/redis this is fine; "
-            "otherwise set KUMIHO_FIREBASE_ID_TOKEN or run kumiho-auth login.",
-            file=sys.stderr,
-        )
+    except Exception as exc:
+        print(f"[kumiho-cowork] Discovery bootstrap failed: {exc}", file=sys.stderr)
         return
 
-    if auth_token.startswith("kh_"):
-        print(
-            "[kumiho-cowork] KUMIHO_AUTH_TOKEN looks like an API key, not a Firebase JWT. "
-            "Memory proxy calls will fail with invalid_id_token.",
-            file=sys.stderr,
-        )
+    try:
+        body = json.loads(body_text)
+    except json.JSONDecodeError:
+        print("[kumiho-cowork] Discovery bootstrap returned invalid JSON.", file=sys.stderr)
+        return
+
+    region = body.get("region")
+    if not isinstance(region, dict):
+        return
+
+    raw_target = ""
+    grpc_authority = region.get("grpc_authority")
+    if isinstance(grpc_authority, str) and grpc_authority.strip():
+        raw_target = grpc_authority
+    else:
+        server_url = region.get("server_url")
+        if isinstance(server_url, str) and server_url.strip():
+            raw_target = server_url
+
+    resolved_target = _normalize_server_target(raw_target)
+    if not resolved_target:
+        return
+
+    os.environ["KUMIHO_SERVER_ENDPOINT"] = resolved_target
+    print(
+        f"[kumiho-cowork] Resolved KUMIHO_SERVER_ENDPOINT={resolved_target} via discovery bootstrap.",
+        file=sys.stderr,
+    )
 
 
 def _configure_llm_fallback() -> None:
@@ -209,8 +282,9 @@ def main() -> int:
     )
     args, passthrough = parser.parse_known_args()
 
-    _normalize_token_envs()
+    _validate_auth_token()
     _warn_auth()
+    _bootstrap_server_endpoint()
     _configure_llm_fallback()
     python_path = _ensure_runtime()
 

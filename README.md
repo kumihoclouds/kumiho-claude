@@ -34,22 +34,13 @@ Set these in your Claude environment (recommended in `.claude/settings.local.jso
 {
   "env": {
     "KUMIHO_AUTH_TOKEN": "YOUR_KUMIHO_BEARER_JWT",
-    "KUMIHO_FIREBASE_ID_TOKEN": "YOUR_FIREBASE_ID_TOKEN",
     "KUMIHO_CONTROL_PLANE_URL": "https://control.kumiho.cloud",
     "KUMIHO_MCP_LOG_LEVEL": "INFO"
   }
 }
 ```
 
-`KUMIHO_AUTH_TOKEN_FILE` is also supported as an alternative to inline token.
 `KUMIHO_AUTH_TOKEN` should be a bearer JWT (three-part token format).
-
-`kumiho-memory` proxy endpoints on older control-plane versions require a
-Firebase ID token. If your control-plane is updated to accept service/control-plane
-tokens for `/api/memory/redis`, dashboard API tokens also work directly.
-
-If you prefer cached auth instead of token env, run `kumiho-auth login` once
-on your machine and omit `KUMIHO_AUTH_TOKEN`.
 
 For higher-quality summarization, set either:
 - `OPENAI_API_KEY` (default provider path), or
@@ -66,12 +57,24 @@ If you see:
 Memory proxy error 401: {"error":"invalid_id_token"}
 ```
 
-then your token type is likely not a Firebase ID token for proxy auth.
+then your token is invalid for the deployed control-plane auth path.
 
 Fix options:
-1. Update control-plane `/api/memory/redis` to accept control-plane/service tokens.
-2. Set `KUMIHO_FIREBASE_ID_TOKEN` to a valid Firebase ID token for your user.
-3. Run `kumiho-auth login` to cache Firebase credentials locally.
+1. Use a fresh dashboard-minted `KUMIHO_AUTH_TOKEN`.
+2. Ensure control-plane `/api/memory/redis` is deployed with control-plane token verification.
+
+If you see:
+
+```text
+StatusCode.UNAVAILABLE ... 127.0.0.1:8080 ... Connection refused
+```
+
+then Kumiho SDK discovery did not resolve a cloud gRPC endpoint and the SDK
+fell back to local default.
+
+Fix options:
+1. Ensure `KUMIHO_CONTROL_PLANE_URL` points to your deployed control plane.
+2. Ensure `/api/discovery/tenant` is deployed with control-plane token verification.
 
 ## Local validation and smoke test
 

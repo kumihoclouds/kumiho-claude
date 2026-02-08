@@ -8,8 +8,7 @@ This plugin uses one local MCP server:
 
 ## Required environment
 
-- `KUMIHO_AUTH_TOKEN` (JWT bearer token) or `KUMIHO_AUTH_TOKEN_FILE`
-- `KUMIHO_FIREBASE_ID_TOKEN` for memory proxy paths (recommended)
+- `KUMIHO_AUTH_TOKEN` (JWT bearer token)
 
 ## Optional environment
 
@@ -28,6 +27,9 @@ This plugin uses one local MCP server:
    - `kumiho_memory_recall`
    - `kumiho_memory_consolidate`
 
-If memory calls fail with `invalid_id_token`, either update control-plane
-`/api/memory/redis` to accept service/control-plane tokens, or provide
-`KUMIHO_FIREBASE_ID_TOKEN` (or run `kumiho-auth login`).
+If memory calls fail with `invalid_id_token`, refresh `KUMIHO_AUTH_TOKEN`
+and verify `/api/memory/redis` is deployed with control-plane token verification.
+
+If direct memory-store calls fail with `StatusCode.UNAVAILABLE` to
+`127.0.0.1:8080`, discovery did not resolve cloud routing. Ensure
+`/api/discovery/tenant` is deployed with control-plane token verification.
