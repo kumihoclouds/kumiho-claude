@@ -10,11 +10,15 @@ preferences, project context, or recurring workflows.
 
 ## Core tools
 
+- `kumiho_chat_add`: append a user/assistant message to Redis working memory
+- `kumiho_chat_get`: inspect working-memory messages for a session
+- `kumiho_chat_clear`: clear working memory for a completed/abandoned session
 - `kumiho_memory_ingest`: store a user message and fetch relevant context
 - `kumiho_memory_add_response`: store the assistant response for the session
 - `kumiho_memory_consolidate`: summarize and persist to long-term memory
 - `kumiho_memory_recall`: retrieve relevant memories
 - `kumiho_memory_store_execution`: store task or tool execution outcomes
+- `kumiho_memory_dream_state`: run maintenance/consolidation across stored memories
 
 ## Recommended pattern
 
@@ -23,6 +27,8 @@ preferences, project context, or recurring workflows.
 3. Add assistant response if needed for full session context.
 4. Consolidate after meaningful exchanges or at task boundaries.
 5. Recall memories before answering follow-up questions that depend on history.
+6. Run `kumiho_memory_dream_state` periodically (or after heavy activity) to
+   deprecate low-value memories and improve retrieval quality.
 
 ## Data minimization
 

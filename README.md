@@ -111,9 +111,13 @@ claude --plugin-dir ./kumiho-cowork
 ```
 
 Then verify Kumiho memory tools are available:
+- `kumiho_chat_add`
+- `kumiho_chat_get`
+- `kumiho_chat_clear`
 - `kumiho_memory_ingest`
 - `kumiho_memory_recall`
 - `kumiho_memory_consolidate`
+- `kumiho_memory_dream_state`
 
 ## Structure
 

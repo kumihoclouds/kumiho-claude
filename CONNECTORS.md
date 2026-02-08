@@ -27,9 +27,13 @@ the launcher to enforce control-plane discovery routing.
 1. Install and enable plugin.
 2. Start a session.
 3. Confirm Kumiho tools appear, for example:
+   - `kumiho_chat_add`
+   - `kumiho_chat_get`
+   - `kumiho_chat_clear`
    - `kumiho_memory_ingest`
    - `kumiho_memory_recall`
    - `kumiho_memory_consolidate`
+   - `kumiho_memory_dream_state`
 
 If memory calls fail with `invalid_id_token`, refresh `KUMIHO_AUTH_TOKEN`
 and verify `/api/memory/redis` is deployed with control-plane token verification.
