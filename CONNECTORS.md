@@ -8,8 +8,9 @@ This plugin uses one local MCP server:
 
 ## Required environment
 
-- `KUMIHO_AUTH_TOKEN` (JWT bearer token)
+- `KUMIHO_AUTH_TOKEN` (JWT bearer token for authenticated memory/graph calls)
   - set this in Claude session env (for example `.claude/settings.local.json`)
+  - if omitted, MCP tools still load but authenticated operations will fail
 
 ## Optional environment
 

@@ -186,10 +186,18 @@ def _bootstrap_server_endpoint() -> None:
             "resolving endpoint via control-plane discovery.",
             file=sys.stderr,
         )
+    # Always clear any inherited endpoint so startup cannot lock onto stale routing.
+    os.environ.pop("KUMIHO_SERVER_ENDPOINT", None)
+    os.environ.pop("KUMIHO_SERVER_ADDRESS", None)
 
     bearer = _load_bearer_token()
     if not bearer:
-        raise RuntimeError("KUMIHO_AUTH_TOKEN is required for cowork plugin discovery bootstrap.")
+        print(
+            "[kumiho-cowork] KUMIHO_AUTH_TOKEN is not set; skipping discovery bootstrap. "
+            "MCP tools will load, but authenticated calls will fail until token is provided.",
+            file=sys.stderr,
+        )
+        return
 
     control_plane_url = os.getenv("KUMIHO_CONTROL_PLANE_URL", "").strip() or "https://control.kumiho.cloud"
     discovery_url = _build_discovery_url(control_plane_url)
@@ -291,8 +299,12 @@ def main() -> int:
     try:
         _bootstrap_server_endpoint()
     except RuntimeError as exc:
-        print(f"[kumiho-cowork] {exc}", file=sys.stderr)
-        return 2
+        print(
+            "[kumiho-cowork] Discovery bootstrap failed. "
+            "Starting MCP server without pre-resolved endpoint. "
+            f"Error: {exc}",
+            file=sys.stderr,
+        )
     _configure_llm_fallback()
     python_path = _ensure_runtime()
 

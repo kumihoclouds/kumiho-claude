@@ -41,8 +41,8 @@ Set these in your Claude environment (recommended in `.claude/settings.local.jso
 ```
 
 `KUMIHO_AUTH_TOKEN` should be a bearer JWT (three-part token format).
-This plugin now requires `KUMIHO_AUTH_TOKEN` and always resolves the gRPC endpoint
-through control-plane discovery.
+The plugin starts without a token so tools remain visible, but authenticated
+memory/graph operations require `KUMIHO_AUTH_TOKEN`.
 
 For higher-quality summarization, set either:
 - `OPENAI_API_KEY` (default provider path), or
@@ -89,6 +89,7 @@ From repository root:
 ```bash
 claude plugin validate ./kumiho-cowork/.claude-plugin/plugin.json
 claude plugin validate ./kumiho-cowork/.claude-plugin/marketplace.json
+# optional but recommended for full auth-path verification:
 export KUMIHO_AUTH_TOKEN=YOUR_KUMIHO_BEARER_JWT
 python ./kumiho-cowork/scripts/run_kumiho_mcp.py --self-test
 ```
