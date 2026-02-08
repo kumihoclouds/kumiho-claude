@@ -1,6 +1,6 @@
 {
   "name": "kumiho-memory",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Run Kumiho MCP locally and enable kumiho-memory tools.",
   "author": {
     "name": "Kumiho Clouds",

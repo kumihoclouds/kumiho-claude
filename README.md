@@ -33,7 +33,8 @@ Set these in your Claude environment (recommended in `.claude/settings.local.jso
 ```json
 {
   "env": {
-    "KUMIHO_AUTH_TOKEN": "YOUR_KUMIHO_API_TOKEN",
+    "KUMIHO_AUTH_TOKEN": "YOUR_KUMIHO_BEARER_JWT",
+    "KUMIHO_FIREBASE_ID_TOKEN": "YOUR_FIREBASE_ID_TOKEN",
     "KUMIHO_CONTROL_PLANE_URL": "https://control.kumiho.cloud",
     "KUMIHO_MCP_LOG_LEVEL": "INFO"
   }
@@ -42,6 +43,10 @@ Set these in your Claude environment (recommended in `.claude/settings.local.jso
 
 `KUMIHO_AUTH_TOKEN_FILE` is also supported as an alternative to inline token.
 `KUMIHO_AUTH_TOKEN` should be a bearer JWT (three-part token format).
+
+`kumiho-memory` proxy endpoints on older control-plane versions require a
+Firebase ID token. If your control-plane is updated to accept service/control-plane
+tokens for `/api/memory/redis`, dashboard API tokens also work directly.
 
 If you prefer cached auth instead of token env, run `kumiho-auth login` once
 on your machine and omit `KUMIHO_AUTH_TOKEN`.
@@ -52,6 +57,21 @@ For higher-quality summarization, set either:
 
 If no LLM key is set, the launcher enables a local fail-fast fallback so MCP
 tools still initialize without external LLM credentials.
+
+## Troubleshooting
+
+If you see:
+
+```text
+Memory proxy error 401: {"error":"invalid_id_token"}
+```
+
+then your token type is likely not a Firebase ID token for proxy auth.
+
+Fix options:
+1. Update control-plane `/api/memory/redis` to accept control-plane/service tokens.
+2. Set `KUMIHO_FIREBASE_ID_TOKEN` to a valid Firebase ID token for your user.
+3. Run `kumiho-auth login` to cache Firebase credentials locally.
 
 ## Local validation and smoke test
 

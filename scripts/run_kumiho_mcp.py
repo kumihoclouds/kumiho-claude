@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import json
 import os
 import shlex
 import subprocess
@@ -91,15 +93,93 @@ def _ensure_runtime() -> Path:
 
 
 def _warn_auth() -> None:
-    token = os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
+    auth_token = os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
+    firebase_token = os.getenv("KUMIHO_FIREBASE_ID_TOKEN", "").strip()
     token_file = os.getenv("KUMIHO_AUTH_TOKEN_FILE", "").strip()
-    if token or token_file:
+    if auth_token or firebase_token or token_file:
         return
     print(
-        "[kumiho-cowork] Warning: KUMIHO_AUTH_TOKEN is not set. "
+        "[kumiho-cowork] Warning: no auth token env is set. "
         "The server may rely on cached auth from kumiho-auth login.",
         file=sys.stderr,
     )
+
+
+def _decode_jwt_claims(token: str) -> dict | None:
+    parts = token.split(".")
+    if len(parts) < 2:
+        return None
+    payload = parts[1]
+    padding = "=" * (-len(payload) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode((payload + padding).encode("utf-8"))
+        claims = json.loads(decoded.decode("utf-8"))
+        if isinstance(claims, dict):
+            return claims
+    except Exception:
+        return None
+    return None
+
+
+def _is_control_plane_token(claims: dict) -> bool:
+    if isinstance(claims.get("tenant_id"), str):
+        return True
+    iss = claims.get("iss")
+    if isinstance(iss, str) and ("control.kumiho.cloud" in iss or "kumiho.io/control-plane" in iss):
+        return True
+    aud = claims.get("aud")
+    if isinstance(aud, str) and aud.startswith("kumiho-server"):
+        return True
+    return False
+
+
+def _is_firebase_id_token(claims: dict) -> bool:
+    iss = claims.get("iss")
+    if isinstance(iss, str) and iss.startswith("https://securetoken.google.com/"):
+        return True
+    firebase = claims.get("firebase")
+    return isinstance(firebase, dict)
+
+
+def _normalize_token_envs() -> None:
+    auth_token = os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
+    firebase_token = os.getenv("KUMIHO_FIREBASE_ID_TOKEN", "").strip()
+
+    if firebase_token and not auth_token:
+        os.environ["KUMIHO_AUTH_TOKEN"] = firebase_token
+        print(
+            "[kumiho-cowork] KUMIHO_AUTH_TOKEN is not set; using KUMIHO_FIREBASE_ID_TOKEN for bearer auth.",
+            file=sys.stderr,
+        )
+        return
+
+    if not auth_token or firebase_token:
+        return
+
+    claims = _decode_jwt_claims(auth_token)
+    if claims and _is_firebase_id_token(claims):
+        os.environ["KUMIHO_FIREBASE_ID_TOKEN"] = auth_token
+        print(
+            "[kumiho-cowork] KUMIHO_AUTH_TOKEN looks like Firebase ID token; mirroring to KUMIHO_FIREBASE_ID_TOKEN.",
+            file=sys.stderr,
+        )
+        return
+
+    if claims and _is_control_plane_token(claims):
+        print(
+            "[kumiho-cowork] KUMIHO_AUTH_TOKEN looks like a control-plane token. "
+            "If your control plane supports service-token auth for /api/memory/redis this is fine; "
+            "otherwise set KUMIHO_FIREBASE_ID_TOKEN or run kumiho-auth login.",
+            file=sys.stderr,
+        )
+        return
+
+    if auth_token.startswith("kh_"):
+        print(
+            "[kumiho-cowork] KUMIHO_AUTH_TOKEN looks like an API key, not a Firebase JWT. "
+            "Memory proxy calls will fail with invalid_id_token.",
+            file=sys.stderr,
+        )
 
 
 def _configure_llm_fallback() -> None:
@@ -129,6 +209,7 @@ def main() -> int:
     )
     args, passthrough = parser.parse_known_args()
 
+    _normalize_token_envs()
     _warn_auth()
     _configure_llm_fallback()
     python_path = _ensure_runtime()

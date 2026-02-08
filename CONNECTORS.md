@@ -9,6 +9,7 @@ This plugin uses one local MCP server:
 ## Required environment
 
 - `KUMIHO_AUTH_TOKEN` (JWT bearer token) or `KUMIHO_AUTH_TOKEN_FILE`
+- `KUMIHO_FIREBASE_ID_TOKEN` for memory proxy paths (recommended)
 
 ## Optional environment
 
@@ -26,3 +27,7 @@ This plugin uses one local MCP server:
    - `kumiho_memory_ingest`
    - `kumiho_memory_recall`
    - `kumiho_memory_consolidate`
+
+If memory calls fail with `invalid_id_token`, either update control-plane
+`/api/memory/redis` to accept service/control-plane tokens, or provide
+`KUMIHO_FIREBASE_ID_TOKEN` (or run `kumiho-auth login`).
