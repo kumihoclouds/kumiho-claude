@@ -76,6 +76,9 @@ Fix options:
 1. Ensure `KUMIHO_CONTROL_PLANE_URL` points to your deployed control plane.
 2. Ensure `/api/discovery/tenant` is deployed with control-plane token verification.
 
+The launcher also falls back to token-claim routing (`region_code` ->
+`{region_code}.kumiho.cloud:443`) when discovery is unavailable.
+
 ## Local validation and smoke test
 
 From repository root:
