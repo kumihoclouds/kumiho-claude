@@ -17,7 +17,6 @@ This plugin uses one local MCP server:
 - `KUMIHO_COWORK_HOME` (override runtime directory)
 - `KUMIHO_COWORK_PACKAGE_SPEC` (override package install spec)
 - `KUMIHO_COWORK_DISABLE_LLM_FALLBACK` (disable local no-key LLM fallback mode)
-- `KUMIHO_COWORK_REGION_DOMAIN_SUFFIX` (default: `kumiho.cloud`; used for token-claim endpoint fallback)
 
 ## Verify connection
 

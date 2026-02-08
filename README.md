@@ -23,7 +23,7 @@ Plugin for Claude that runs a local Kumiho MCP server with `kumiho-memory`.
 Default package spec:
 
 ```text
-kumiho[mcp]>=0.9.4 kumiho-memory[all]>=0.1.1
+kumiho[mcp]>=0.9.5 kumiho-memory[all]>=0.1.1
 ```
 
 ## Required environment
@@ -70,14 +70,11 @@ StatusCode.UNAVAILABLE ... 127.0.0.1:8080 ... Connection refused
 ```
 
 then Kumiho SDK discovery did not resolve a cloud gRPC endpoint and the SDK
-fell back to local default.
+could not bootstrap routing from control-plane.
 
 Fix options:
 1. Ensure `KUMIHO_CONTROL_PLANE_URL` points to your deployed control plane.
 2. Ensure `/api/discovery/tenant` is deployed with control-plane token verification.
-
-The launcher also falls back to token-claim routing (`region_code` ->
-`{region_code}.kumiho.cloud:443`) when discovery is unavailable.
 
 ## Local validation and smoke test
 

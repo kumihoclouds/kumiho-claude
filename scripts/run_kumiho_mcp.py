@@ -17,7 +17,7 @@ import venv
 from pathlib import Path
 
 
-DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.4 kumiho-memory[all]>=0.1.1"
+DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.5 kumiho-memory[all]>=0.1.1"
 MARKER_FILE = ".installed-packages.txt"
 
 
@@ -178,41 +178,6 @@ def _normalize_server_target(raw_target: str) -> str | None:
     return target or None
 
 
-def _derive_server_target_from_token(token: str) -> str | None:
-    claims = _decode_jwt_claims(token)
-    if not claims:
-        return None
-
-    grpc_authority = claims.get("grpc_authority")
-    if isinstance(grpc_authority, str) and grpc_authority.strip():
-        return _normalize_server_target(grpc_authority)
-
-    server_url = claims.get("server_url")
-    if isinstance(server_url, str) and server_url.strip():
-        return _normalize_server_target(server_url)
-
-    region_code = claims.get("region_code")
-    if isinstance(region_code, str) and region_code.strip():
-        suffix = os.getenv("KUMIHO_COWORK_REGION_DOMAIN_SUFFIX", "kumiho.cloud").strip().strip(".")
-        if suffix:
-            return f"{region_code.strip()}.{suffix}:443"
-
-    return None
-
-
-def _set_server_endpoint_from_token(token: str, reason: str) -> bool:
-    resolved_target = _derive_server_target_from_token(token)
-    if not resolved_target:
-        return False
-
-    os.environ["KUMIHO_SERVER_ENDPOINT"] = resolved_target
-    print(
-        f"[kumiho-cowork] Using KUMIHO_SERVER_ENDPOINT={resolved_target} from token claims ({reason}).",
-        file=sys.stderr,
-    )
-    return True
-
-
 def _bootstrap_server_endpoint() -> None:
     if os.getenv("KUMIHO_SERVER_ENDPOINT", "").strip() or os.getenv("KUMIHO_SERVER_ADDRESS", "").strip():
         return
@@ -255,24 +220,18 @@ def _bootstrap_server_endpoint() -> None:
             f"[kumiho-cowork] Discovery bootstrap skipped ({exc.code}).{detail}",
             file=sys.stderr,
         )
-        _set_server_endpoint_from_token(bearer, f"discovery_http_{exc.code}")
-        return
+        raise RuntimeError("Control-plane discovery failed; refusing endpoint fallback.") from exc
     except Exception as exc:
-        print(f"[kumiho-cowork] Discovery bootstrap failed: {exc}", file=sys.stderr)
-        _set_server_endpoint_from_token(bearer, "discovery_exception")
-        return
+        raise RuntimeError(f"Control-plane discovery request failed: {exc}") from exc
 
     try:
         body = json.loads(body_text)
     except json.JSONDecodeError:
-        print("[kumiho-cowork] Discovery bootstrap returned invalid JSON.", file=sys.stderr)
-        _set_server_endpoint_from_token(bearer, "invalid_discovery_json")
-        return
+        raise RuntimeError("Control-plane discovery returned invalid JSON.")
 
     region = body.get("region")
     if not isinstance(region, dict):
-        _set_server_endpoint_from_token(bearer, "missing_discovery_region")
-        return
+        raise RuntimeError("Control-plane discovery response missing region routing.")
 
     raw_target = ""
     grpc_authority = region.get("grpc_authority")
@@ -285,8 +244,7 @@ def _bootstrap_server_endpoint() -> None:
 
     resolved_target = _normalize_server_target(raw_target)
     if not resolved_target:
-        _set_server_endpoint_from_token(bearer, "empty_discovery_target")
-        return
+        raise RuntimeError("Control-plane discovery response missing gRPC target.")
 
     os.environ["KUMIHO_SERVER_ENDPOINT"] = resolved_target
     print(
@@ -324,7 +282,11 @@ def main() -> int:
 
     _validate_auth_token()
     _warn_auth()
-    _bootstrap_server_endpoint()
+    try:
+        _bootstrap_server_endpoint()
+    except RuntimeError as exc:
+        print(f"[kumiho-cowork] {exc}", file=sys.stderr)
+        return 2
     _configure_llm_fallback()
     python_path = _ensure_runtime()
 
