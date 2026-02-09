@@ -43,6 +43,11 @@ Set these in your Claude environment (recommended in `.claude/settings.local.jso
 `KUMIHO_AUTH_TOKEN` should be a bearer JWT (three-part token format).
 The plugin starts without a token so tools remain visible, but authenticated
 memory/graph operations require `KUMIHO_AUTH_TOKEN`.
+Launcher startup also attempts to read `KUMIHO_*` values from project/user
+`.claude/settings.local.json` and `.claude/settings.json` if they are not
+present in process env.
+If no env token is found, launcher also falls back to local Kumiho credential
+cache (`~/.kumiho/kumiho_authentication.json`) when available.
 
 For higher-quality summarization, set either:
 - `OPENAI_API_KEY` (default provider path), or

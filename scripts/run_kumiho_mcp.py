@@ -10,6 +10,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -96,7 +97,7 @@ def _ensure_runtime() -> Path:
 
 
 def _warn_auth() -> None:
-    auth_token = os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
+    auth_token = _load_bearer_token()
     if auth_token:
         return
     print(
@@ -123,7 +124,7 @@ def _decode_jwt_claims(token: str) -> dict | None:
 
 
 def _validate_auth_token() -> None:
-    auth_token = os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
+    auth_token = _load_bearer_token()
     if not auth_token:
         return
 
@@ -139,7 +140,163 @@ def _validate_auth_token() -> None:
 
 
 def _load_bearer_token() -> str:
-    return os.getenv("KUMIHO_AUTH_TOKEN", "").strip()
+    value = (os.getenv("KUMIHO_AUTH_TOKEN", "") or "").strip()
+    if _looks_like_placeholder(value):
+        value = ""
+    if value:
+        return value
+    return _load_cached_kumiho_token()
+
+
+def _load_cached_kumiho_token() -> str:
+    config_dir = (os.getenv("KUMIHO_CONFIG_DIR", "") or "").strip()
+    if config_dir:
+        path = Path(config_dir).expanduser() / "kumiho_authentication.json"
+    else:
+        path = Path.home() / ".kumiho" / "kumiho_authentication.json"
+
+    if not path.exists():
+        return ""
+    try:
+        body = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(body, dict):
+        return ""
+
+    now = int(time.time())
+    candidates = (
+        ("control_plane_token", "cp_expires_at"),
+        ("id_token", "expires_at"),
+    )
+    for token_key, expiry_key in candidates:
+        raw = body.get(token_key)
+        if not isinstance(raw, str):
+            continue
+        token = raw.strip()
+        if not token or _looks_like_placeholder(token):
+            continue
+        expiry = body.get(expiry_key)
+        if isinstance(expiry, (int, float)) and int(expiry) <= now + 30:
+            continue
+        return token
+    return ""
+
+
+def _looks_like_placeholder(value: str) -> bool:
+    text = value.strip()
+    if not text:
+        return False
+    # Guard against unresolved template literals like ${KUMIHO_AUTH_TOKEN:-}
+    # being injected as raw strings by a host/plugin runtime.
+    return text.startswith("${") and text.endswith("}")
+
+
+def _set_env_if_absent(key: str, value: str, source: str) -> bool:
+    existing = (os.getenv(key, "") or "").strip()
+    if existing and not _looks_like_placeholder(existing):
+        return False
+    candidate = (value or "").strip()
+    if not candidate or _looks_like_placeholder(candidate):
+        return False
+    os.environ[key] = candidate
+    print(f"[kumiho-cowork] Loaded {key} from {source}.", file=sys.stderr)
+    return True
+
+
+def _plugin_root() -> Path:
+    from_env = (os.getenv("CLAUDE_PLUGIN_ROOT", "") or "").strip()
+    if from_env:
+        return Path(from_env).expanduser()
+    return Path(__file__).resolve().parents[1]
+
+
+def _hydrate_env_from_plugin_mcp() -> None:
+    root = _plugin_root()
+    mcp_path = root / ".mcp.json"
+    if not mcp_path.exists():
+        return
+
+    try:
+        body = json.loads(mcp_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    if not isinstance(body, dict):
+        return
+    servers = body.get("mcpServers")
+    if not isinstance(servers, dict):
+        return
+    server = servers.get("kumiho-memory")
+    if not isinstance(server, dict):
+        return
+    env = server.get("env")
+    if not isinstance(env, dict):
+        return
+
+    for key in ("KUMIHO_AUTH_TOKEN", "KUMIHO_CONTROL_PLANE_URL", "KUMIHO_TENANT_HINT"):
+        raw = env.get(key)
+        if isinstance(raw, str):
+            _set_env_if_absent(key, raw, f"{mcp_path}")
+
+
+def _candidate_settings_paths() -> list[Path]:
+    candidates: list[Path] = []
+    seen: set[str] = set()
+
+    def add(path: Path) -> None:
+        key = str(path).lower()
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(path)
+
+    cwd = Path.cwd().resolve()
+    for base in [cwd, *cwd.parents]:
+        claude_dir = base / ".claude"
+        add(claude_dir / "settings.local.json")
+        add(claude_dir / "settings.json")
+
+    home_claude = Path.home() / ".claude"
+    add(home_claude / "settings.local.json")
+    add(home_claude / "settings.json")
+    return candidates
+
+
+def _hydrate_env_from_claude_settings() -> None:
+    for settings_path in _candidate_settings_paths():
+        if not settings_path.exists():
+            continue
+        try:
+            body = json.loads(settings_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(body, dict):
+            continue
+        env = body.get("env")
+        if not isinstance(env, dict):
+            continue
+        loaded_any = False
+        for key in ("KUMIHO_AUTH_TOKEN", "KUMIHO_CONTROL_PLANE_URL", "KUMIHO_TENANT_HINT"):
+            raw = env.get(key)
+            if isinstance(raw, str):
+                if _set_env_if_absent(key, raw, f"{settings_path}"):
+                    loaded_any = True
+        if loaded_any:
+            return
+
+
+def _hydrate_env_from_local_config() -> None:
+    _hydrate_env_from_claude_settings()
+    _hydrate_env_from_plugin_mcp()
+    env_auth = (os.getenv("KUMIHO_AUTH_TOKEN", "") or "").strip()
+    cached = _load_bearer_token()
+    if cached and (not env_auth or _looks_like_placeholder(env_auth)):
+        os.environ["KUMIHO_AUTH_TOKEN"] = cached
+        print(
+            "[kumiho-cowork] Loaded KUMIHO_AUTH_TOKEN from local Kumiho credential cache.",
+            file=sys.stderr,
+        )
 
 
 def _build_discovery_url(base_url: str) -> str:
@@ -294,6 +451,7 @@ def main() -> int:
     )
     args, passthrough = parser.parse_known_args()
 
+    _hydrate_env_from_local_config()
     _validate_auth_token()
     _warn_auth()
     try:
