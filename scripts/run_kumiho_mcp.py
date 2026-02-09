@@ -20,6 +20,7 @@ from pathlib import Path
 
 DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.5 kumiho-memory[all]>=0.1.1"
 MARKER_FILE = ".installed-packages.txt"
+DEFAULT_DISCOVERY_USER_AGENT = "kumiho-cowork/0.3.8"
 
 
 def _state_dir() -> Path:
@@ -140,7 +141,7 @@ def _validate_auth_token() -> None:
 
 
 def _load_bearer_token() -> str:
-    value = (os.getenv("KUMIHO_AUTH_TOKEN", "") or "").strip()
+    value = _clean_token_candidate((os.getenv("KUMIHO_AUTH_TOKEN", "") or "").strip())
     if _looks_like_placeholder(value):
         value = ""
     if value:
@@ -148,20 +149,30 @@ def _load_bearer_token() -> str:
     return _load_cached_kumiho_token()
 
 
-def _load_cached_kumiho_token() -> str:
+def _cached_kumiho_auth_path() -> Path:
     config_dir = (os.getenv("KUMIHO_CONFIG_DIR", "") or "").strip()
     if config_dir:
-        path = Path(config_dir).expanduser() / "kumiho_authentication.json"
-    else:
-        path = Path.home() / ".kumiho" / "kumiho_authentication.json"
+        return Path(config_dir).expanduser() / "kumiho_authentication.json"
+    return Path.home() / ".kumiho" / "kumiho_authentication.json"
+
+
+def _read_cached_kumiho_credentials() -> dict | None:
+    path = _cached_kumiho_auth_path()
 
     if not path.exists():
-        return ""
+        return None
     try:
         body = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return ""
+        return None
     if not isinstance(body, dict):
+        return None
+    return body
+
+
+def _load_cached_kumiho_token() -> str:
+    body = _read_cached_kumiho_credentials()
+    if not body:
         return ""
 
     now = int(time.time())
@@ -173,7 +184,7 @@ def _load_cached_kumiho_token() -> str:
         raw = body.get(token_key)
         if not isinstance(raw, str):
             continue
-        token = raw.strip()
+        token = _clean_token_candidate(raw.strip())
         if not token or _looks_like_placeholder(token):
             continue
         expiry = body.get(expiry_key)
@@ -181,6 +192,48 @@ def _load_cached_kumiho_token() -> str:
             continue
         return token
     return ""
+
+
+def _discovery_token_candidates() -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def add(candidate: str) -> None:
+        token = _clean_token_candidate((candidate or "").strip())
+        if not token or _looks_like_placeholder(token):
+            return
+        if token in seen:
+            return
+        seen.add(token)
+        out.append(token)
+
+    add((os.getenv("KUMIHO_AUTH_TOKEN", "") or "").strip())
+    add(_load_bearer_token())
+
+    body = _read_cached_kumiho_credentials()
+    if isinstance(body, dict):
+        now = int(time.time())
+        for token_key, expiry_key in (("control_plane_token", "cp_expires_at"), ("id_token", "expires_at")):
+            raw = body.get(token_key)
+            if not isinstance(raw, str):
+                continue
+            expiry = body.get(expiry_key)
+            if isinstance(expiry, (int, float)) and int(expiry) <= now + 30:
+                continue
+            add(raw)
+
+    return out
+
+
+def _clean_token_candidate(value: str) -> str:
+    token = (value or "").strip()
+    if not token:
+        return ""
+    if (token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'")):
+        token = token[1:-1].strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    return token
 
 
 def _looks_like_placeholder(value: str) -> bool:
@@ -197,6 +250,8 @@ def _set_env_if_absent(key: str, value: str, source: str) -> bool:
     if existing and not _looks_like_placeholder(existing):
         return False
     candidate = (value or "").strip()
+    if key == "KUMIHO_AUTH_TOKEN":
+        candidate = _clean_token_candidate(candidate)
     if not candidate or _looks_like_placeholder(candidate):
         return False
     os.environ[key] = candidate
@@ -310,6 +365,20 @@ def _build_discovery_url(base_url: str) -> str:
     return f"{base}/api/discovery/tenant"
 
 
+def _load_control_plane_url() -> str:
+    raw = (os.getenv("KUMIHO_CONTROL_PLANE_URL", "") or "").strip()
+    if _looks_like_placeholder(raw):
+        raw = ""
+    return raw or "https://control.kumiho.cloud"
+
+
+def _load_discovery_user_agent() -> str:
+    raw = (os.getenv("KUMIHO_COWORK_DISCOVERY_USER_AGENT", "") or "").strip()
+    if not raw or _looks_like_placeholder(raw):
+        return DEFAULT_DISCOVERY_USER_AGENT
+    return raw
+
+
 def _normalize_server_target(raw_target: str) -> str | None:
     target = raw_target.strip()
     if not target:
@@ -347,8 +416,8 @@ def _bootstrap_server_endpoint() -> None:
     os.environ.pop("KUMIHO_SERVER_ENDPOINT", None)
     os.environ.pop("KUMIHO_SERVER_ADDRESS", None)
 
-    bearer = _load_bearer_token()
-    if not bearer:
+    token_candidates = _discovery_token_candidates()
+    if not token_candidates:
         print(
             "[kumiho-cowork] KUMIHO_AUTH_TOKEN is not set; skipping discovery bootstrap. "
             "MCP tools will load, but authenticated calls will fail until token is provided.",
@@ -356,43 +425,59 @@ def _bootstrap_server_endpoint() -> None:
         )
         return
 
-    control_plane_url = os.getenv("KUMIHO_CONTROL_PLANE_URL", "").strip() or "https://control.kumiho.cloud"
+    control_plane_url = _load_control_plane_url()
     discovery_url = _build_discovery_url(control_plane_url)
     tenant_hint = os.getenv("KUMIHO_TENANT_HINT", "").strip()
+    discovery_user_agent = _load_discovery_user_agent()
 
     payload: dict[str, str] = {}
     if tenant_hint:
         payload["tenant_hint"] = tenant_hint
 
-    request = urllib.request.Request(
-        discovery_url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {bearer}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    body_text: str | None = None
+    last_error: Exception | None = None
+    request_body = json.dumps(payload).encode("utf-8")
 
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            body_text = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        detail = ""
-        try:
-            detail = exc.read().decode("utf-8")
-        except Exception:
-            detail = ""
-        detail = detail.strip().replace("\n", " ")
-        if detail:
-            detail = f" {detail[:160]}"
-        print(
-            f"[kumiho-cowork] Discovery bootstrap skipped ({exc.code}).{detail}",
-            file=sys.stderr,
+    for index, bearer in enumerate(token_candidates, start=1):
+        request = urllib.request.Request(
+            discovery_url,
+            data=request_body,
+            headers={
+                "Authorization": f"Bearer {bearer}",
+                "Content-Type": "application/json",
+                "User-Agent": discovery_user_agent,
+            },
+            method="POST",
         )
-        raise RuntimeError("Control-plane discovery failed; refusing endpoint fallback.") from exc
-    except Exception as exc:
-        raise RuntimeError(f"Control-plane discovery request failed: {exc}") from exc
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                body_text = response.read().decode("utf-8")
+            break
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                detail = exc.read().decode("utf-8")
+            except Exception:
+                detail = ""
+            detail = detail.strip().replace("\n", " ")
+            if detail:
+                detail = f" {detail[:160]}"
+            print(
+                f"[kumiho-cowork] Discovery candidate #{index} failed ({exc.code}).{detail}",
+                file=sys.stderr,
+            )
+            last_error = exc
+        except Exception as exc:
+            print(
+                f"[kumiho-cowork] Discovery candidate #{index} request error: {exc}",
+                file=sys.stderr,
+            )
+            last_error = exc
+
+    if body_text is None:
+        if last_error is None:
+            raise RuntimeError("Control-plane discovery failed with no usable token candidates.")
+        raise RuntimeError(f"Control-plane discovery failed across all token candidates: {last_error}")
 
     try:
         body = json.loads(body_text)

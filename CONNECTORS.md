@@ -11,6 +11,7 @@ This plugin uses one local MCP server:
 - `KUMIHO_AUTH_TOKEN` (JWT bearer token for authenticated memory/graph calls)
   - set this in Claude session env (for example `.claude/settings.local.json`)
   - if omitted, MCP tools still load but authenticated operations will fail
+  - raw JWT or `Bearer <jwt>` are both accepted
 - launcher also auto-loads `KUMIHO_*` values from nearby `.claude/settings*.json`
   when not already present in env
 - if no env token is present, launcher falls back to
@@ -23,6 +24,7 @@ This plugin uses one local MCP server:
 - `KUMIHO_COWORK_HOME` (override runtime directory)
 - `KUMIHO_COWORK_PACKAGE_SPEC` (override package install spec)
 - `KUMIHO_COWORK_DISABLE_LLM_FALLBACK` (disable local no-key LLM fallback mode)
+- `KUMIHO_COWORK_DISCOVERY_USER_AGENT` (override discovery HTTP User-Agent)
 
 `KUMIHO_SERVER_ENDPOINT` and `KUMIHO_SERVER_ADDRESS` are intentionally ignored by
 the launcher to enforce control-plane discovery routing.
@@ -46,3 +48,10 @@ and verify `/api/memory/redis` is deployed with control-plane token verification
 If direct memory-store calls fail with `StatusCode.UNAVAILABLE` to
 `127.0.0.1:8080`, discovery did not resolve cloud routing. Ensure
 `/api/discovery/tenant` is deployed with control-plane token verification.
+
+If discovery returns Cloudflare `error code: 1010`, your edge rules are likely
+blocking the default Python user-agent. The launcher uses a custom user-agent;
+you can override it with `KUMIHO_COWORK_DISCOVERY_USER_AGENT`.
+
+You can validate discovery directly with:
+`python ./kumiho-cowork/scripts/test_discovery_env.py --env-file .env.local`

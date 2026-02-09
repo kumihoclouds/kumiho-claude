@@ -41,6 +41,7 @@ Set these in your Claude environment (recommended in `.claude/settings.local.jso
 ```
 
 `KUMIHO_AUTH_TOKEN` should be a bearer JWT (three-part token format).
+Both raw JWT and `"Bearer <jwt>"` formats are accepted.
 The plugin starts without a token so tools remain visible, but authenticated
 memory/graph operations require `KUMIHO_AUTH_TOKEN`.
 Launcher startup also attempts to read `KUMIHO_*` values from project/user
@@ -48,6 +49,10 @@ Launcher startup also attempts to read `KUMIHO_*` values from project/user
 present in process env.
 If no env token is found, launcher also falls back to local Kumiho credential
 cache (`~/.kumiho/kumiho_authentication.json`) when available.
+Discovery bootstrap tries multiple token candidates (env token, cached control-plane
+token, cached Firebase token) before giving up.
+If needed, discovery request user-agent can be overridden with
+`KUMIHO_COWORK_DISCOVERY_USER_AGENT`.
 
 For higher-quality summarization, set either:
 - `OPENAI_API_KEY` (default provider path), or
@@ -100,6 +105,38 @@ python ./kumiho-cowork/scripts/run_kumiho_mcp.py --self-test
 ```
 
 The self-test provisions the runtime and verifies required modules.
+
+## Discovery test with .env.local
+
+Create a `.env.local` file:
+
+```dotenv
+KUMIHO_AUTH_TOKEN=eyJ...your-jwt...
+KUMIHO_CONTROL_PLANE_URL=https://control.kumiho.cloud
+# optional:
+# KUMIHO_TENANT_HINT=your-tenant-slug
+```
+
+Or start from template:
+
+```bash
+cp ./kumiho-cowork/.env.local.example ./.env.local
+```
+
+PowerShell:
+
+```powershell
+Copy-Item .\kumiho-cowork\.env.local.example .\.env.local
+```
+
+Run:
+
+```bash
+python ./kumiho-cowork/scripts/test_discovery_env.py --env-file .env.local
+```
+
+The script prints `resolved_target` and exits non-zero if discovery resolves
+to localhost or cannot resolve a valid Kumiho server target.
 
 ## Local usage
 
