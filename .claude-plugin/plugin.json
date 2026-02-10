@@ -1,7 +1,7 @@
 {
   "name": "kumiho-memory",
-  "version": "0.4.0",
-  "description": "Run Kumiho MCP locally and enable kumiho-memory tools.",
+  "version": "0.4.1",
+  "description": "Persistent graph-native memory for Claude — recalls context across sessions, stores decisions and preferences, and bootstraps identity at session start.",
   "author": {
     "name": "Kumiho Clouds",
     "url": "https://kumiho.io"
@@ -13,10 +13,13 @@
     "kumiho",
     "memory",
     "mcp",
+    "graph",
+    "cognitive-memory",
     "plugin",
     "claude"
   ],
   "skills": "./skills",
   "commands": "./commands",
+  "hooks": "./hooks/hooks.json",
   "mcpServers": "./.mcp.json"
 }

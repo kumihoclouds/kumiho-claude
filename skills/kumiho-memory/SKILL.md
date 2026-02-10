@@ -1,6 +1,6 @@
 ---
 name: kumiho-memory
-description: Use Kumiho MCP memory tools to capture durable context and recall relevant user/project memory across sessions.
+description: Persistent memory system — bootstraps identity, recalls previous sessions, stores decisions and preferences. Invoke at session start, or when the user asks about past context or stored preferences.
 ---
 
 # Kumiho Memory Skill

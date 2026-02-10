@@ -1,6 +1,18 @@
 {
-  "description": "Auto-approve non-destructive Kumiho memory operations",
+  "description": "Kumiho memory plugin hooks — session bootstrap and auto-approval",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/session-bootstrap.py\"",
+            "timeout": 5,
+            "statusMessage": "Bootstrapping Kumiho memory..."
+          }
+        ]
+      }
+    ],
     "PermissionRequest": [
       {
         "matcher": "mcp__.*kumiho-memory.*__kumiho_.*",
