@@ -35,26 +35,32 @@ prefer. Present exactly these two options:
 2. Extract the token string. Strip any surrounding quotes, whitespace,
    or a leading `Bearer` prefix before passing it to the cache script.
 
-3. Store the token by running this Bash command. Replace `<CLEANED_TOKEN>`
-   with the extracted JWT -- **do not** echo it back in visible output:
+3. Store the token in **two places** -- the credential cache AND a `.env.local`
+   file at the plugin root. Run both commands. Replace `<CLEANED_TOKEN>`
+   with the extracted JWT -- **do not** echo it back in visible output.
+
+   **Step 3a** -- Write the credential cache (long-term storage):
 
    ```bash
    python "${CLAUDE_PLUGIN_ROOT}/scripts/cache_auth_token.py" --token "<CLEANED_TOKEN>"
    ```
 
    If `CLAUDE_PLUGIN_ROOT` is not set, fall back to a path relative to
-   the plugin directory:
+   the plugin directory.
+
+   **Step 3b** -- Write `.env.local` at the plugin root (picked up by the
+   MCP server on next restart):
 
    ```bash
-   python "<plugin-dir>/scripts/cache_auth_token.py" --token "<CLEANED_TOKEN>"
+   printf 'KUMIHO_AUTH_TOKEN=%s\n' '<CLEANED_TOKEN>' > "${CLAUDE_PLUGIN_ROOT}/.env.local"
    ```
 
-4. **On success (exit 0)**, tell the user:
-   - "API token cached at `~/.kumiho/kumiho_authentication.json` (stored
-     under `api_token` -- any CLI login session tokens are not affected)."
-   - "The MCP server will pick this up on the next session restart.
-     You can restart now, or continue -- memory tools will activate in
-     your next session."
+   If `CLAUDE_PLUGIN_ROOT` is not set, skip this step -- the credential
+   cache from step 3a is sufficient.
+
+4. **On success (both exit 0)**, tell the user:
+   - "Token stored. The MCP server will pick this up when you restart
+     the session. Restart now to activate memory tools."
 
 5. **On failure (non-zero exit)**, relay the error and ask the user to
    double-check their token.
@@ -72,8 +78,8 @@ prefer. Present exactly these two options:
    `control_plane_token`.
 
 2. Let them know:
-   - "Once login completes, restart this session (or start a new one)
-     and memory tools will authenticate automatically."
+   - "Once login completes, restart this session and memory tools will
+     authenticate automatically."
    - "Session tokens expire -- you may need to re-run `kumiho-cli login`
      periodically."
 
