@@ -26,9 +26,46 @@ Default package spec:
 kumiho[mcp]>=0.9.5 kumiho-memory[all]>=0.1.1
 ```
 
-## Required environment
+## Authentication setup
 
-Set these in your Claude environment (recommended in `.claude/settings.local.json`):
+There are two independent ways to authenticate. Use whichever fits your
+workflow — or run `/kumiho-auth` and it will walk you through both options.
+
+### Method A — Dashboard API token (recommended)
+
+Mint a long-lived API token from the [kumiho.io dashboard](https://kumiho.io)
+under **API Keys**. Then either:
+
+1. Run the interactive command inside Claude Code:
+
+   ```text
+   /kumiho-auth
+   ```
+
+2. Or cache it from the command line:
+
+   ```bash
+   echo 'eyJ...' | python ./kumiho-cowork/scripts/cache_auth_token.py --stdin
+   ```
+
+Both store the token under the `api_token` key in
+`~/.kumiho/kumiho_authentication.json`. It does **not** overwrite session
+tokens from `kumiho-cli login`.
+
+### Method B — CLI login (email + password)
+
+```bash
+kumiho-cli login
+```
+
+This creates `~/.kumiho/kumiho_authentication.json` with `id_token` and
+`control_plane_token`. These are session tokens and expire — refresh it with
+`kumiho-cli refresh` when they do.
+
+### Alternative: environment variable
+
+Set `KUMIHO_AUTH_TOKEN` in your Claude environment
+(`.claude/settings.local.json`):
 
 ```json
 {
@@ -40,17 +77,24 @@ Set these in your Claude environment (recommended in `.claude/settings.local.jso
 }
 ```
 
-`KUMIHO_AUTH_TOKEN` should be a bearer JWT (three-part token format).
+> **Note:** Some Claude Code host environments do not propagate
+> `settings.local.json` env values to MCP subprocess environments. If your
+> token is not picked up via this method, use `/kumiho-auth` or the credential
+> cache script above instead.
+
+### Token resolution order
+
+The launcher resolves authentication from these sources (first match wins):
+
+1. Process environment variable `KUMIHO_AUTH_TOKEN`
+2. `.claude/settings.local.json` then `.claude/settings.json` (project, then home)
+3. `.mcp.json` env block
+4. `~/.kumiho/kumiho_authentication.json` credential cache — checks keys in order: `control_plane_token`, `id_token`, `api_token`
+
 Both raw JWT and `"Bearer <jwt>"` formats are accepted.
 The plugin starts without a token so tools remain visible, but authenticated
-memory/graph operations require `KUMIHO_AUTH_TOKEN`.
-Launcher startup also attempts to read `KUMIHO_*` values from project/user
-`.claude/settings.local.json` and `.claude/settings.json` if they are not
-present in process env.
-If no env token is found, launcher also falls back to local Kumiho credential
-cache (`~/.kumiho/kumiho_authentication.json`) when available.
-Discovery bootstrap tries multiple token candidates (env token, cached control-plane
-token, cached Firebase token) before giving up.
+memory/graph operations require a valid token.
+Discovery bootstrap tries multiple token candidates before giving up.
 If needed, discovery request user-agent can be overridden with
 `KUMIHO_COWORK_DISCOVERY_USER_AGENT`.
 
@@ -61,7 +105,43 @@ For higher-quality summarization, set either:
 If no LLM key is set, the launcher enables a local fail-fast fallback so MCP
 tools still initialize without external LLM credentials.
 
+## Conversation artifacts
+
+The plugin follows a **BYO-storage** model: raw conversation content is stored
+locally as Markdown files; the cloud graph stores only metadata and artifact
+pointers. This aligns with the Graph-Native Cognitive Memory architecture
+(Principle 11: Metadata Over Content).
+
+Artifacts are saved to `~/.kumiho/artifacts/{YYYY-MM-DD}/` by default.
+Override with `KUMIHO_ARTIFACT_DIR`:
+
+```bash
+# Project-local artifacts:
+export KUMIHO_ARTIFACT_DIR=.kumiho/artifacts
+```
+
+Each session with 2+ meaningful exchanges produces a Markdown artifact with
+YAML frontmatter (session_id, user_id, agent_name, date, topics, summary)
+and structured `## Exchange N` sections.
+
 ## Troubleshooting
+
+### Token not picked up
+
+If the bootstrap logs:
+
+```text
+[kumiho-cowork] Searched N settings paths; none contained a usable env block.
+```
+
+Your `settings.local.json` is not being found or doesn't contain an `env`
+block. Use `/kumiho-auth` to cache the token directly, or run:
+
+```bash
+echo 'YOUR_JWT' | python ./kumiho-cowork/scripts/cache_auth_token.py --stdin
+```
+
+### Auth error (401)
 
 If you see:
 
@@ -72,8 +152,11 @@ Memory proxy error 401: {"error":"invalid_id_token"}
 then your token is invalid for the deployed control-plane auth path.
 
 Fix options:
-1. Use a fresh dashboard-minted `KUMIHO_AUTH_TOKEN`.
+
+1. Use a fresh dashboard-minted token via `/kumiho-auth`.
 2. Ensure control-plane `/api/memory/redis` is deployed with control-plane token verification.
+
+### Connection refused
 
 If you see:
 
@@ -169,8 +252,13 @@ Then verify Kumiho memory tools are available:
 ├── .claude-plugin/plugin.json
 ├── .claude-plugin/marketplace.json
 ├── .mcp.json
-├── commands/memory-capture.md
+├── commands/
+│   ├── memory-capture.md
+│   ├── kumiho-auth.md
+│   └── dream-state.md
 ├── skills/kumiho-memory/SKILL.md
-└── scripts/run_kumiho_mcp.py
+└── scripts/
+    ├── run_kumiho_mcp.py
+    ├── cache_auth_token.py
+    └── test_discovery_env.py
 ```
-

@@ -20,7 +20,7 @@ from pathlib import Path
 
 DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.5 kumiho-memory[all]>=0.1.1"
 MARKER_FILE = ".installed-packages.txt"
-DEFAULT_DISCOVERY_USER_AGENT = "kumiho-cowork/0.3.8"
+DEFAULT_DISCOVERY_USER_AGENT = "kumiho-cowork/0.4.0"
 
 
 def _state_dir() -> Path:
@@ -176,9 +176,12 @@ def _load_cached_kumiho_token() -> str:
         return ""
 
     now = int(time.time())
+    # Session tokens (from `kumiho-cli login`) have expiry checks.
+    # Dashboard API tokens are long-lived; expiry check is optional.
     candidates = (
         ("control_plane_token", "cp_expires_at"),
         ("id_token", "expires_at"),
+        ("api_token", "api_token_expires_at"),
     )
     for token_key, expiry_key in candidates:
         raw = body.get(token_key)
@@ -319,7 +322,9 @@ def _candidate_settings_paths() -> list[Path]:
 
 
 def _hydrate_env_from_claude_settings() -> None:
-    for settings_path in _candidate_settings_paths():
+    candidates = _candidate_settings_paths()
+    found_any = False
+    for settings_path in candidates:
         if not settings_path.exists():
             continue
         try:
@@ -331,6 +336,7 @@ def _hydrate_env_from_claude_settings() -> None:
         env = body.get("env")
         if not isinstance(env, dict):
             continue
+        found_any = True
         loaded_any = False
         for key in ("KUMIHO_AUTH_TOKEN", "KUMIHO_CONTROL_PLANE_URL", "KUMIHO_TENANT_HINT"):
             raw = env.get(key)
@@ -339,6 +345,13 @@ def _hydrate_env_from_claude_settings() -> None:
                     loaded_any = True
         if loaded_any:
             return
+    if not found_any:
+        print(
+            f"[kumiho-cowork] Searched {len(candidates)} settings paths; "
+            "none contained a usable env block. "
+            "Use /kumiho-auth or set KUMIHO_AUTH_TOKEN in ~/.kumiho/kumiho_authentication.json.",
+            file=sys.stderr,
+        )
 
 
 def _hydrate_env_from_local_config() -> None:

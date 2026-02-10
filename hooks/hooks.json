@@ -1,0 +1,17 @@
+{
+  "description": "Auto-approve non-destructive Kumiho memory operations",
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "mcp__.*kumiho-memory.*__kumiho_.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/auto-approve-memory.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
