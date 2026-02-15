@@ -9,11 +9,12 @@ This plugin uses one local MCP server:
 ## Required environment
 
 - `KUMIHO_AUTH_TOKEN` (JWT bearer token for authenticated memory/graph calls)
-  - set this in Claude session env (for example `.claude/settings.local.json`)
+  - set this in `.env.local` at the plugin root, or in `.claude/settings.local.json` (Claude Code only)
   - if omitted, MCP tools still load but authenticated operations will fail
   - raw JWT or `Bearer <jwt>` are both accepted
-- launcher also auto-loads `KUMIHO_*` values from nearby `.claude/settings*.json`
+- in Claude Code, the launcher also auto-loads `KUMIHO_*` values from nearby `.claude/settings*.json`
   when not already present in env
+- in Claude Cowork, use `.env.local` or the credential cache (`~/.kumiho/kumiho_authentication.json`) for authentication
 - if no env token is present, launcher falls back to
   `~/.kumiho/kumiho_authentication.json` token cache
 

@@ -1,7 +1,7 @@
 {
   "name": "kumiho-memory",
-  "version": "0.4.2",
-  "description": "Persistent graph-native memory for Claude — recalls context across sessions, stores decisions and preferences, and bootstraps identity at session start.",
+  "version": "0.5.0",
+  "description": "Persistent graph-native memory for Claude — recalls context across sessions, stores decisions and preferences, and bootstraps identity at session start. Works in both Claude Code and Cowork.",
   "author": {
     "name": "Kumiho Clouds",
     "url": "https://kumiho.io"

@@ -403,6 +403,57 @@ def _hydrate_env_from_local_config() -> None:
         )
 
 
+def _sync_token_to_mcp_json() -> None:
+    """Write the resolved token into .mcp.json so Claude Desktop picks it up.
+
+    On Claude Desktop (macOS) the host does not expand ``${VAR:-}``
+    templates.  If the token was loaded from the credential cache or
+    ``.env.local``, ``.mcp.json`` still contains the unresolved
+    placeholder.  Writing the real token ensures that future server
+    restarts get the token directly from the env block without needing
+    the fallback hunt.
+    """
+    token = _clean_token_candidate((os.getenv("KUMIHO_AUTH_TOKEN", "") or "").strip())
+    if not token or _looks_like_placeholder(token):
+        return
+
+    mcp_path = _plugin_root() / ".mcp.json"
+    if not mcp_path.exists():
+        return
+
+    try:
+        body = json.loads(mcp_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    servers = body.get("mcpServers")
+    if not isinstance(servers, dict):
+        return
+    server = servers.get("kumiho-memory")
+    if not isinstance(server, dict):
+        return
+    env = server.get("env")
+    if not isinstance(env, dict):
+        return
+
+    current = (env.get("KUMIHO_AUTH_TOKEN") or "").strip()
+    if current == token:
+        return  # already in sync
+
+    env["KUMIHO_AUTH_TOKEN"] = token
+    try:
+        mcp_path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+        print(
+            "[kumiho-cowork] Synced KUMIHO_AUTH_TOKEN into .mcp.json.",
+            file=sys.stderr,
+        )
+    except Exception as exc:
+        print(
+            f"[kumiho-cowork] Warning: could not sync token to .mcp.json: {exc}",
+            file=sys.stderr,
+        )
+
+
 def _build_discovery_url(base_url: str) -> str:
     base = base_url.rstrip("/")
     if base.endswith("/api/discovery/tenant"):
@@ -586,6 +637,7 @@ def main() -> int:
     args, passthrough = parser.parse_known_args()
 
     _hydrate_env_from_local_config()
+    _sync_token_to_mcp_json()
     _validate_auth_token()
     _warn_auth()
     try:

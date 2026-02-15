@@ -58,9 +58,26 @@ prefer. Present exactly these two options:
    If `CLAUDE_PLUGIN_ROOT` is not set, skip this step -- the credential
    cache from step 3a is sufficient.
 
-4. **On success (both exit 0)**, tell the user:
-   - "Token stored. The MCP server will pick this up when you restart
-     the session. Restart now to activate memory tools."
+   **Step 3c** -- Patch `.mcp.json` to trigger a Claude Desktop server
+   restart. In both Claude Code and Cowork, the MCP server process
+   persists across chat sessions. Simply caching the token to disk is
+   not enough -- the running process never picks it up. Writing the
+   token into `.mcp.json` causes the Claude app to detect the config
+   change and restart the MCP server automatically.
+
+   ```bash
+   python "${CLAUDE_PLUGIN_ROOT}/scripts/patch_mcp_json_token.py" --token "<CLEANED_TOKEN>"
+   ```
+
+   If `CLAUDE_PLUGIN_ROOT` is not set, fall back to a path relative to
+   the plugin directory. If this step fails, warn the user that they may
+   need to fully quit and relaunch Claude Desktop for the token to take
+   effect.
+
+4. **On success (all steps exit 0)**, tell the user:
+   - "Token stored. The Claude app should detect the config change and
+     restart the MCP server automatically. If memory tools still don't
+     connect, fully quit and relaunch the app."
 
 5. **On failure (non-zero exit)**, relay the error and ask the user to
    double-check their token.

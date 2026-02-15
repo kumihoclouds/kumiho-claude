@@ -1,5 +1,5 @@
 {
-  "description": "Kumiho memory plugin hooks — session bootstrap and auto-approval",
+  "description": "Kumiho memory plugin hooks — session bootstrap, auto-approval, and artifact generation",
   "hooks": {
     "SessionStart": [
       {
@@ -13,13 +13,25 @@
         ]
       }
     ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/save-session-artifact.py\"",
+            "timeout": 10,
+            "statusMessage": "Saving session artifact..."
+          }
+        ]
+      }
+    ],
     "PermissionRequest": [
       {
         "matcher": "mcp__.*kumiho-memory.*__kumiho_.*",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/auto-approve-memory.sh",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/auto-approve-memory.py\"",
             "timeout": 5
           }
         ]

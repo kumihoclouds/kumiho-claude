@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """SessionStart hook — inject memory skill invocation instruction.
 
-This hook fires at the beginning of every Claude Code session (new or
-resumed) and injects additionalContext that tells Claude to invoke the
+This hook fires at the beginning of every session (Claude Code or
+Cowork) and injects additionalContext that tells Claude to invoke the
 kumiho-memory skill before responding to the user.  Without this hook
 the skill's SKILL.md content is never loaded into context and the
 memory bootstrap cannot run.

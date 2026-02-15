@@ -1,6 +1,6 @@
 ---
 name: kumiho-memory
-description: Persistent memory system — bootstraps identity, recalls previous sessions, stores decisions and preferences. Invoke at session start, or when the user asks about past context or stored preferences.
+description: Persistent memory system — bootstraps identity at session start, recalls previous sessions, and stores decisions and preferences. Use when the user starts a session, asks about past context, or when any topic might have history.
 ---
 
 # Kumiho Memory Skill
@@ -333,6 +333,69 @@ Do NOT skip step 2.
    toward Y now."
 4. **Act** — respond with the full context of your accumulated understanding.
 
+### Revision discipline — stack, don't scatter (MANDATORY)
+
+**Design alignment**: Principle 5 — Immutable Revisions, Mutable Pointers.
+
+The graph's power comes from **stacking revisions on a single item**, not
+creating a new item for every iteration. A paper that goes through four
+drafts should be ONE item (`paper-title.document`) with revisions r=1
+through r=4 — not four separate items (`paper-draft`, `paper-v2`,
+`paper-final`, `paper-final-v2`). The same applies to decisions, facts,
+plans, and any evolving content.
+
+**CRITICAL RULE: Always search before you create.** Before calling
+`kumiho_create_item`, you MUST first search for an existing item that
+represents the same concept:
+
+```
+# WRONG — blindly creating a new item
+kumiho_create_item(
+  space_path = "CognitiveMemory/papers",
+  item_name  = "cognitive-memory-v2",    # ← proliferating items
+  kind       = "document"
+)
+
+# RIGHT — search first, then stack
+results = kumiho_search_items(
+  query = "cognitive memory paper",
+  kind  = "document"
+)
+# Found existing item → create a new revision on it
+kumiho_create_revision(
+  item_kref = "kref://CognitiveMemory/papers/cognitive-memory-paper.document",
+  metadata  = { "summary": "Revised abstract and methodology section", ... },
+  artifact  = { "location": "/path/to/updated-paper.md", "content_type": "text/markdown" }
+)
+# Move the published tag to the new revision
+kumiho_tag_revision(
+  revision_kref = "kref://CognitiveMemory/papers/cognitive-memory-paper.document?r=4",
+  tag           = "published"
+)
+```
+
+**The revision stacking checklist (run through this mentally every time):**
+
+1. **Search** — call `kumiho_search_items` or `kumiho_fulltext_search` for
+   the concept you're about to store. Use broad keywords.
+2. **If found** — create a new revision on the existing item via
+   `kumiho_create_revision`. Include updated metadata and artifact.
+   Move the `published` tag to the new revision.
+3. **If NOT found** — only then create a new item via
+   `kumiho_create_item`, then create revision r=1 on it.
+4. **Never** name items with version suffixes (`-v2`, `-draft-2`,
+   `-final`, `-revised`). The revision number IS the version.
+
+**When to create a genuinely new item vs. a new revision:**
+
+| Scenario | Action |
+|----------|--------|
+| Updated version of the same document | New revision on existing item |
+| Revised decision (changed your mind) | New revision on existing item + SUPERSEDES edge |
+| Corrected fact | New revision on existing item |
+| Completely different topic/concept | New item |
+| A sub-document (e.g., "appendix" of a paper) | New item + CONTAINS edge from parent |
+
 ### What to remember automatically
 
 Ingest these via `kumiho_memory_ingest` **without asking**:
@@ -471,6 +534,81 @@ result = kumiho_find_path(
 **Weave results into natural conversation.** Don't dump raw graph output.
 Translate traversal results into plain reasoning: "We decided X because of
 Y, which was based on Z."
+
+### Agent output artifacts — persist what you produce (MANDATORY)
+
+**Design alignment**: BYO-Storage (paper §5.4.2), Principle 11 (Metadata
+Over Content). The graph stores pointers; the actual content lives as
+local files.
+
+Every significant output the agent generates — code, documents, analyses,
+plans, summaries, paper drafts, config files — **MUST** be persisted as a
+local artifact file and associated with a graph revision. Outputting content
+only in the chat response is not enough. Chat responses are ephemeral; the
+artifact is what your future self (and the user) can find again.
+
+**What counts as a significant output:**
+
+- Documents: paper drafts, reports, proposals, design docs, READMEs
+- Code: scripts, configurations, generated code, patches
+- Analyses: research summaries, comparison tables, benchmark results
+- Plans: implementation plans, roadmaps, architecture decisions
+- Creative: outlines, brainstorms, structured notes the user asked for
+
+**What does NOT need an artifact:**
+
+- Short answers to factual questions
+- Conversational responses
+- Minor clarifications or one-liners
+- Tool call results that are already stored elsewhere
+
+**The artifact creation flow (follow this every time):**
+
+1. **Write the output to disk** using the Write tool. Place it in the
+   artifact directory at a meaningful path:
+   ```
+   {artifact_dir}/{category}/{descriptive-name}.{ext}
+   ```
+   Examples:
+   - `~/.kumiho/artifacts/papers/cognitive-memory-v3-abstract.md`
+   - `~/.kumiho/artifacts/code/grpc-auth-middleware.rs`
+   - `~/.kumiho/artifacts/analyses/neo4j-vs-postgres-comparison.md`
+
+2. **Search for an existing item** (revision discipline — see above).
+
+3. **Create or update the revision** with the artifact attached:
+   ```
+   kumiho_create_revision(
+     item_kref = "kref://CognitiveMemory/papers/cognitive-memory.document",
+     metadata  = {
+       "summary":    "Updated abstract with reviewer feedback incorporated",
+       "type":       "document",
+       "format":     "markdown",
+       "generated_by": "agent"
+     },
+     artifact  = {
+       "location":     "/absolute/path/to/file.md",
+       "content_type": "text/markdown"
+     }
+   )
+   ```
+
+4. **Tag as published** — move the `published` tag to the new revision.
+
+5. **Link provenance** — create a `CREATED_FROM` edge from the artifact's
+   revision back to the conversation or input that produced it:
+   ```
+   kumiho_create_edge(
+     source_kref = "kref://CognitiveMemory/papers/cognitive-memory.document?r=3",
+     target_kref = "kref://CognitiveMemory/conversations/2026-02-11.conversation?r=1",
+     edge_type   = "CREATED_FROM"
+   )
+   ```
+
+**If the user iterates on the same output** (e.g., "revise the abstract",
+"update the plan"), do NOT create a new item. Stack a new revision on the
+existing item, write the updated artifact, and move the `published` tag.
+The revision history preserves every version automatically.
 
 ### Procedural memory — storing tool executions
 
