@@ -20,7 +20,7 @@ from pathlib import Path
 
 DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.7 kumiho-memory[all]>=0.3.0"
 MARKER_FILE = ".installed-packages.txt"
-DEFAULT_DISCOVERY_USER_AGENT = "kumiho-claude/0.4.0"
+DEFAULT_DISCOVERY_USER_AGENT = "kumiho-claude/0.7.3"
 
 
 def _state_dir() -> Path:
@@ -45,7 +45,10 @@ def _venv_python(venv_dir: Path) -> Path:
 
 
 def _run(cmd: list[str], *, check: bool = True) -> int:
-    proc = subprocess.run(cmd, check=check)
+    # Redirect stdout → stderr so pip/venv output never pollutes the MCP
+    # stdio channel.  Claude Desktop connects stdout directly to its
+    # JSON-RPC parser, so any stray text there hangs the connection.
+    proc = subprocess.run(cmd, stdout=sys.stderr, check=check)
     return proc.returncode
 
 
@@ -77,7 +80,8 @@ def _install_dependencies(python_path: Path, package_spec: str) -> None:
 
 
 def _ensure_runtime() -> Path:
-    package_spec = os.getenv("KUMIHO_CLAUDE_PACKAGE_SPEC", "").strip() or DEFAULT_PACKAGE_SPEC
+    raw_spec = os.getenv("KUMIHO_CLAUDE_PACKAGE_SPEC", "").strip()
+    package_spec = DEFAULT_PACKAGE_SPEC if (not raw_spec or _looks_like_placeholder(raw_spec)) else raw_spec
     state_dir = _state_dir()
     state_dir.mkdir(parents=True, exist_ok=True)
 
@@ -609,6 +613,28 @@ def _bootstrap_server_endpoint() -> None:
     )
 
 
+def _sanitize_placeholder_env_vars() -> None:
+    """Strip unresolved ${VAR:-default} placeholders that Claude Desktop
+    passes through as literal strings.  Without this, downstream code
+    (pip install, log-level parsing, etc.) receives garbage values.
+    """
+    for key in (
+        "KUMIHO_AUTH_TOKEN",
+        "KUMIHO_CONTROL_PLANE_URL",
+        "KUMIHO_CLAUDE_PACKAGE_SPEC",
+        "KUMIHO_CLAUDE_DISCOVERY_USER_AGENT",
+        "KUMIHO_MCP_LOG_LEVEL",
+        "KUMIHO_CLAUDE_DISABLE_LLM_FALLBACK",
+    ):
+        raw = (os.getenv(key, "") or "").strip()
+        if raw and _looks_like_placeholder(raw):
+            os.environ.pop(key, None)
+            print(
+                f"[kumiho-claude] Cleared unresolved placeholder for {key}.",
+                file=sys.stderr,
+            )
+
+
 def _configure_llm_fallback() -> None:
     if os.getenv("KUMIHO_CLAUDE_DISABLE_LLM_FALLBACK", "").strip().lower() in {"1", "true", "yes"}:
         return
@@ -636,6 +662,7 @@ def main() -> int:
     )
     args, passthrough = parser.parse_known_args()
 
+    _sanitize_placeholder_env_vars()
     _hydrate_env_from_local_config()
     _sync_token_to_mcp_json()
     _validate_auth_token()
