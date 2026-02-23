@@ -102,7 +102,14 @@ thread.
 
 ---
 
-## Session bootstrap (MUST run at start of every session)
+## Session bootstrap (ONE-TIME — runs only when this skill is first invoked)
+
+**This section runs EXACTLY ONCE per session** — when the Skill tool first
+loads this document. Once `agent.instruction` has been fetched and identity
+metadata parsed, **do NOT fetch it again** for the rest of the session.
+The identity fields (agent_name, user_name, communication_tone, etc.) are
+already in your context after the first load. Re-fetching is wasteful and
+adds latency to every turn.
 
 At the very beginning of each chat session, **before** responding to the
 user's first message, perform the following steps in order:
@@ -209,6 +216,11 @@ plugin valuable**.
 
 For **every** meaningful user message, follow this loop **in order**.
 Do NOT skip step 2.
+
+**Important:** This loop uses `kumiho_memory_recall` only — do NOT
+re-fetch `agent.instruction` via `kumiho_get_revision_by_tag`. That
+was already done once during session bootstrap and the identity metadata
+is already in context.
 
 1. **Perceive** — understand what the user is asking or saying.
 2. **Recall** — call `kumiho_memory_recall` with relevant keywords.
