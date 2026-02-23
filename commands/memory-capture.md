@@ -11,12 +11,21 @@ in later sessions.
 ## Steps
 
 1. If no argument was provided, ask the user for the memory text to store.
-2. Call `kumiho_memory_ingest` with:
-   - `message`: the provided memory text
-   - `user_id`: use a stable user id for this workspace
-   - `context`: `"cowork-manual-capture"`
-3. Confirm what was stored and mention it can be recalled with
-   `kumiho_memory_recall`.
+2. Call `kumiho_memory_recall` with the memory text as query to find
+   related existing memories. Collect any returned `kref` values with
+   score > 0.5.
+3. Call `kumiho_memory_store` with:
+   - `user_text`: the provided memory text
+   - `assistant_text`: `"Manual memory capture via /memory-capture"`
+   - `memory_type`: infer from content — `"fact"` for facts, `"decision"`
+     for decisions, `"summary"` for preferences
+   - `source_revision_krefs`: krefs from step 2 (if any were relevant)
+   - `space_hint`: `"manual-capture"`
+4. Call `kumiho_memory_discover_edges` with:
+   - `revision_kref`: the `revision_kref` from step 3's result
+   - `summary`: the provided memory text
+5. Confirm what was stored, how many edges were created, and mention it
+   can be recalled with `kumiho_memory_recall`.
 
 ## Guardrails
 

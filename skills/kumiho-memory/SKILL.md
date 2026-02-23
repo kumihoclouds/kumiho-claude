@@ -47,6 +47,13 @@ themselves or their project, **store it**. Don't ask "should I remember this?"
 for routine facts. Just ingest it via `kumiho_memory_ingest`. Reserve
 confirmation prompts for sensitive or personal data only.
 
+**This applies to your own answers too.** After you give a response that
+contains a decision, architectural recommendation, explanation of a complex
+topic, debugging resolution, or any reusable knowledge — store it via
+`kumiho_memory_store`. Your future self (and theirs) will need this context.
+The rule is simple: **if the answer was worth giving, it's worth
+remembering.**
+
 ### 4. Reference, don't recite — and NEVER narrate the plumbing
 When you use a memory, weave it in naturally: "Since you prefer gRPC over
 REST..." or "Last time we settled on the event-driven approach for this..."
@@ -116,7 +123,7 @@ kumiho_get_revision_by_tag(
 | Result | Meaning | Action |
 |--------|---------|--------|
 | Revision returned | Auth works, identity exists | Parse metadata, proceed to **Step 2** (returning user greeting). |
-| Item/tag not found | Auth works, first session | Proceed to **Onboarding flow** below. |
+| Item/tag not found | Auth works, first session | Proceed to [Onboarding flow](references/onboarding.md). |
 | Auth/connection error | Token missing or invalid | Show a soft warning (see below), then assist normally. |
 
 **Soft auth warning** (non-blocking):
@@ -184,130 +191,12 @@ someone reading a name tag.
 
 ## Onboarding flow
 
-When no `agent.instruction` exists, this is your **first meeting** with the
-user. Make it count. This isn't a form — it's the start of a working
-relationship.
+When no `agent.instruction` exists, this is the user's first session.
+Follow the full onboarding process to collect preferences and persist
+the agent identity profile.
 
-Before asking questions, set the tone — introduce yourself, explain the
-memory, and **proactively address privacy**:
-
-> "Hey — looks like this is our first time working together. I have a
-> persistent memory, so anything I learn about you now, I'll carry into every
-> future session. A few things worth knowing upfront:
->
-> - Your full conversations stay **on your machine** as local files — only
->   short summaries reach the cloud.
-> - I'll never store passwords, tokens, or secrets.
-> - Everything I remember has a revision history — nothing gets silently
->   changed or deleted.
-> - You can ask me what I know about you anytime, or tell me to forget
->   something.
->
-> Let me ask a few things so I can be actually useful from day one."
-
-Use the `AskUserQuestion` tool, grouping questions efficiently (max 4 per
-call). **Two rounds only.**
-
-### Round 1 — Identity & Communication
-
-Ask all four in a **single** `AskUserQuestion` call:
-
-1. "What should I call you?" (text input)
-2. "Would you like to give me a name, or should I go by Kumiho?"
-   (options: "Kumiho" / text input)
-3. "What language(s) do you prefer?"
-   (multi-select: English, Korean, Japanese, Spanish, Other)
-4. "How should I communicate?"
-   (single-select: Casual, Professional, Balanced)
-
-### Round 2 — Context & Storage
-
-Ask all four in a **single** `AskUserQuestion` call:
-
-1. "How detailed should my answers be by default?"
-   (single-select: Concise, Balanced, Detailed)
-2. "What's your role or area of expertise?" (text input)
-3. "Where should I save conversation artifacts (full session transcripts)?"
-   (single-select:
-   - `~/.kumiho/artifacts/` — Home directory (default, shared across projects)
-   - `.kumiho/artifacts/` — Project-local (artifacts stay with the repo)
-   - Custom path — let user type a path)
-4. "Any specific rules for how I should behave? For example: 'never
-   over-apologise', 'always store new preferences'. Feel free to skip."
-   (text input, allow skip)
-
-**Timezone**: Auto-detect from the system locale or the user's environment.
-Do not ask explicitly — store it via a follow-up memory capture if needed.
-
-**Primary tools**: Inferred from usage over time and captured automatically
-via `kumiho_memory_ingest`. Not asked during onboarding.
-
-### After collecting answers — PERSIST BEFORE GREETING
-
-**CRITICAL**: You MUST store the profile to the graph **before** sending
-any welcome message. Do NOT greet the user or say "profile saved" until
-all three MCP calls below have succeeded. If you skip this step the
-onboarding data is lost and the user will have to repeat it next session.
-
-**Step A** — Create the item (if it doesn't exist). Call this MCP tool now:
-
-```
-kumiho_create_item(
-  space_path = "CognitiveMemory",
-  item_name  = "agent",
-  kind       = "instruction"
-)
-```
-
-**Step B** — Create a revision with the collected metadata. Call this MCP
-tool now, filling in every field from the answers you just collected:
-
-```
-kumiho_create_revision(
-  item_kref = "kref://CognitiveMemory/agent.instruction",
-  metadata  = {
-    "agent_name":           "<chosen or 'Kumiho'>",
-    "user_name":            "<provided>",
-    "user_languages":       "<comma-separated>",
-    "communication_tone":   "<casual|professional|balanced>",
-    "verbosity":            "<concise|balanced|detailed>",
-    "user_role":            "<provided>",
-    "user_expertise_level": "<inferred from role>",
-    "primary_tools":        "",
-    "artifact_dir":         "<chosen path or '~/.kumiho/artifacts/'>",
-    "timezone":             "<auto-detected>",
-    "interaction_rules":    "<provided or empty>",
-    "memory_behaviour":     "balanced"
-  }
-)
-```
-
-**Step C** — Tag the revision as `published`. Call this MCP tool now:
-
-```
-kumiho_tag_revision(
-  revision_kref = "kref://CognitiveMemory/agent.instruction?r=1",
-  tag           = "published"
-)
-```
-
-**Step D** — Only AFTER steps A-C succeed, welcome them properly. Don't
-just confirm "profile saved." Make it personal:
-
-> "Got it, {user_name}. I'm {agent_name}. I'll keep things {tone} and
-> {verbosity}. I'll remember what we work on together — decisions,
-> preferences, context — so you never have to repeat yourself. What are
-> we starting with?"
-
-If any of steps A-C fail, tell the user what went wrong and retry. Do
-NOT skip persistence and move on to chatting.
-
-### Updating the agent instruction
-
-If the user asks to change any preferences later, create a **new revision** of
-the same item with updated metadata and move the `published` tag to the new
-revision. Never delete old revisions — they serve as history (Principle 5:
-Immutable Revisions, Mutable Pointers).
+See [Onboarding flow](references/onboarding.md) for the complete
+two-round question flow and persistence steps.
 
 ---
 
@@ -327,334 +216,118 @@ Do NOT skip step 2.
    decisions, project facts, personal details, tools, past conversations.
    When in doubt, recall anyway — a false search is cheap, a missed memory
    is not. **Never answer "I don't know" without recalling first.**
+   **Hold the krefs.** The recall results include a `kref` field for each
+   memory. Keep these in working context — if you store a new memory later
+   this turn, pass the relevant ones as `source_revision_krefs` to
+   `kumiho_memory_store` (see Store & Link Protocol below).
+   **Evaluate siblings.** If results include `sibling_revisions`, scan
+   them to find the revision most relevant to the current query (see
+   Sibling revision selection below).
 3. **Revise** — integrate recalled memories with the current request. If a
    recalled memory contradicts what the user is saying now, acknowledge the
    evolution: "Last time we went with X, but it sounds like you're leaning
    toward Y now."
 4. **Act** — respond with the full context of your accumulated understanding.
 
-### Revision discipline — stack, don't scatter (MANDATORY)
+### Graph-augmented recall
 
-**Design alignment**: Principle 5 — Immutable Revisions, Mutable Pointers.
+The `kumiho_memory_recall` tool supports `graph_augmented: true` for
+multi-query reformulation + edge traversal + semantic fallback. Use it
+when the user's question is indirect, involves chains of decisions, or
+standard recall returned few results.
 
-The graph's power comes from **stacking revisions on a single item**, not
-creating a new item for every iteration. A paper that goes through four
-drafts should be ONE item (`paper-title.document`) with revisions r=1
-through r=4 — not four separate items (`paper-draft`, `paper-v2`,
-`paper-final`, `paper-final-v2`). The same applies to decisions, facts,
-plans, and any evolving content.
+See [Edges and traversal](references/edges-and-traversal.md) for when
+to use graph-augmented recall vs. standard recall.
+
+### Sibling revision selection (client-side reranking)
+
+When `kumiho_memory_recall` returns results, each result may include a
+`sibling_revisions` array — other revisions of the same stacked item.
+These siblings represent different temporal snapshots of the same topic
+(e.g., different conversations about the same person or project).
+
+**You are the reranker.** Instead of a server-side LLM picking the best
+sibling, you evaluate them yourself using the structured metadata
+included in each sibling. This is **more accurate** than server-side
+reranking because you have the full conversation context — you know
+exactly what the user needs, not just a query string.
+
+**When siblings are present in recall results:**
+
+1. **Scan the sibling summaries** — each sibling includes `title`,
+   `summary`, and optionally structured fields (`entities`, `facts`,
+   `implications`, `events`).
+2. **Select the most relevant sibling(s)** for the user's current query.
+   The primary result (highest vector score) isn't always the best match —
+   a sibling revision may contain the specific detail the user is asking
+   about.
+3. **Use the selected sibling's content** in your response. Reference its
+   `kref` for any follow-up store operations (`source_revision_krefs`).
+4. **Ignore irrelevant siblings** — if the primary result is already the
+   best match, use it directly. Don't force sibling selection when it
+   doesn't help.
+
+**Example:**
+- User asks: "Does Evan practice guitar?"
+- Recall returns a stacked item about Evan with 5 sibling revisions
+- Sibling r=3: summary mentions "Evan practices guitar weekly" → **best match**
+- Primary r=5: summary mentions "Evan's wedding planning" → skip
+- → Use r=3's content and kref in your response
+
+**Why this works:** The agent running the recall IS a frontier LLM. Using
+the host model for sibling selection means zero additional API cost, higher
+quality than a dedicated lightweight reranker, and natural integration with
+the conversation flow. This is LLM-Decoupled Memory in action — the memory
+layer provides structured data, the consumer's own intelligence does the
+selection.
+
+### Memory discipline
 
 **CRITICAL RULE: Always search before you create.** Before calling
-`kumiho_create_item`, you MUST first search for an existing item that
-represents the same concept:
+`kumiho_create_item`, search for an existing item first. Stack revisions
+on existing items — never create `item-v2` when you should create r=2.
 
-```
-# WRONG — blindly creating a new item
-kumiho_create_item(
-  space_path = "CognitiveMemory/papers",
-  item_name  = "cognitive-memory-v2",    # ← proliferating items
-  kind       = "document"
-)
+Ingest decisions, preferences, project facts, and corrections via
+`kumiho_memory_ingest` **without asking**. Store your own significant
+responses (decisions, bug fixes, implementation summaries) via
+`kumiho_memory_store`. Ask before remembering sensitive personal
+information.
 
-# RIGHT — search first, then stack
-results = kumiho_search_items(
-  query = "cognitive memory paper",
-  kind  = "document"
-)
-# Found existing item → create a new revision on it
-kumiho_create_revision(
-  item_kref = "kref://CognitiveMemory/papers/cognitive-memory-paper.document",
-  metadata  = { "summary": "Revised abstract and methodology section", ... },
-  artifact  = { "location": "/path/to/updated-paper.md", "content_type": "text/markdown" }
-)
-# Move the published tag to the new revision
-kumiho_tag_revision(
-  revision_kref = "kref://CognitiveMemory/papers/cognitive-memory-paper.document?r=4",
-  tag           = "published"
-)
-```
+See [Memory lifecycle](references/memory-lifecycle.md) for revision
+stacking rules, auto-store criteria, and contradiction handling.
 
-**The revision stacking checklist (run through this mentally every time):**
+### Store & Link Protocol (MANDATORY)
 
-1. **Search** — call `kumiho_search_items` or `kumiho_fulltext_search` for
-   the concept you're about to store. Use broad keywords.
-2. **If found** — create a new revision on the existing item via
-   `kumiho_create_revision`. Include updated metadata and artifact.
-   Move the `published` tag to the new revision.
-3. **If NOT found** — only then create a new item via
-   `kumiho_create_item`, then create revision r=1 on it.
-4. **Never** name items with version suffixes (`-v2`, `-draft-2`,
-   `-final`, `-revised`). The revision number IS the version.
+Every memory store operation MUST create edges. Isolated nodes are dead
+nodes. Follow this three-step protocol:
 
-**When to create a genuinely new item vs. a new revision:**
+1. **Collect source krefs** from this turn's recall results
+2. **Pass them as `source_revision_krefs`** to `kumiho_memory_store`
+3. **Call `kumiho_memory_discover_edges`** on the returned `revision_kref`
 
-| Scenario | Action |
-|----------|--------|
-| Updated version of the same document | New revision on existing item |
-| Revised decision (changed your mind) | New revision on existing item + SUPERSEDES edge |
-| Corrected fact | New revision on existing item |
-| Completely different topic/concept | New item |
-| A sub-document (e.g., "appendix" of a paper) | New item + CONTAINS edge from parent |
+**Always follow this protocol** when calling `kumiho_memory_store`. If
+recall results from this turn are relevant, pass their krefs as
+`source_revision_krefs`. Then call `kumiho_memory_discover_edges`.
 
-### What to remember automatically
+See [Store & Link Protocol](references/store-and-link.md) for the full
+workflow with examples, edge types reference, and rules of thumb.
 
-Ingest these via `kumiho_memory_ingest` **without asking**:
+### Artifacts, procedural memory, and context compaction
 
-- **Decisions**: "Let's use PostgreSQL for this" → ingest as a decision
-- **Preferences**: "I prefer tabs over spaces" → ingest as a preference
-- **Project facts**: "The API is deployed on Cloud Run" → ingest as context
-- **Corrections**: "Actually, the endpoint is /v2 not /v1" → ingest, and
-  it will supersede the earlier belief in the graph
-- **Tool/workflow patterns**: User always runs `cargo clippy` before
-  committing → ingest as a procedural pattern
+Every significant agent output (documents, code, analyses, plans) MUST
+be persisted as a local file and associated with a graph revision.
+Follow with `kumiho_memory_discover_edges`.
 
-### What to ask before remembering
+Store significant tool executions (builds, deploys, tests) via
+`kumiho_memory_store_execution`.
 
-- Sensitive personal information (health, finances, relationships)
-- Information the user explicitly marks as temporary or off-record
-- Credentials, tokens, or secrets (never store these — see Data Minimization)
+**Context compaction**: When context is compacted (`/compact` or
+auto-compression), immediately store the compact summary as memory via
+`kumiho_memory_store` with `memory_type: "summary"` and tags
+`["compact", "session-context"]`, then call `kumiho_memory_discover_edges`.
 
-### How to handle contradictions
-
-When new information conflicts with a stored memory:
-
-1. Acknowledge it naturally: "I had noted you prefer X — sounds like that's
-   changed?"
-2. If confirmed, ingest the new fact. The graph's revision system
-   (SUPERSEDES edge) handles the belief evolution automatically.
-3. Don't cling to old context. The latest revision tagged `published` is
-   always the current truth.
-
-### Building the reasoning graph — edge creation
-
-Memories stored as isolated nodes are just a fancy key-value store. What
-makes this a *graph* is the **edges** — explicit relationships that encode
-*why* things are connected, not just *that* they're related.
-
-**Design alignment**: Principle 6 — Explicit Over Inferred Relationships.
-Embedding similarity finds related content; edges encode reasoning structure.
-Both are necessary; neither is sufficient alone.
-
-Use `kumiho_create_edge` to link revisions whenever you observe a
-relationship. The edge types and when to create them:
-
-| Edge type | Meaning | When to create |
-|-----------|---------|----------------|
-| `DEPENDS_ON` | "This memory's validity depends on that being true" | A decision rests on an assumption or fact. If the fact changes, the decision may need revisiting. |
-| `DERIVED_FROM` | "This conclusion was reached by analyzing those sources" | You synthesize a summary, extract a principle, or draw a conclusion from one or more conversations or facts. |
-| `SUPERSEDES` | "This memory replaces that older one" | A belief is updated — new preference, revised decision, corrected fact. Created automatically by the ingest pipeline for belief revision. |
-| `REFERENCED` | "This memory mentions or relates to that concept" | A conversation references a known project, tool, or earlier decision — loose association, not causal. |
-| `CREATED_FROM` | "This output was generated from these inputs" | An artifact (code, document, config) was produced during a session. Link the artifact's revision to the conversation that spawned it. |
-| `CONTAINS` | "This group/bundle contains these members" | A topic bundle groups related memories. Used by Dream State and manual curation. |
-
-**Examples of edge creation during a session:**
-
-```
-# User decides on gRPC after discussing performance benchmarks
-kumiho_create_edge(
-  source_kref = "kref://CognitiveMemory/decisions/use-grpc.decision?r=1",
-  target_kref = "kref://CognitiveMemory/facts/benchmark-results.fact?r=1",
-  edge_type   = "DERIVED_FROM"
-)
-
-# A deployment decision depends on the infrastructure choice
-kumiho_create_edge(
-  source_kref = "kref://CognitiveMemory/decisions/deploy-cloud-run.decision?r=1",
-  target_kref = "kref://CognitiveMemory/decisions/use-grpc.decision?r=1",
-  edge_type   = "DEPENDS_ON"
-)
-
-# Conversation references a known project fact
-kumiho_create_edge(
-  source_kref = "kref://CognitiveMemory/conversations/2026-02-10.conversation?r=1",
-  target_kref = "kref://CognitiveMemory/facts/api-deployed-cloud-run.fact?r=1",
-  edge_type   = "REFERENCED"
-)
-```
-
-**When to create edges — rules of thumb:**
-
-- **After ingesting a decision**: Ask yourself — what evidence or prior
-  decisions led to this? Create DERIVED_FROM edges to those sources.
-- **After ingesting a fact that changes things**: Create DEPENDS_ON edges
-  from any decision that relied on the old state of that fact.
-- **When synthesizing a principle from multiple conversations**: Create
-  DERIVED_FROM edges from the principle back to each source conversation.
-- **When a conversation references known memories**: Create REFERENCED edges
-  to link the conversation to the existing knowledge it touches.
-- **Don't over-link**. If the relationship is tenuous or speculative, skip
-  it. A clean graph with meaningful edges beats a noisy one.
-
-### Using graph traversal — reasoning about memories
-
-The graph is not just storage — it's a **reasoning tool**. Use traversal
-when the user asks questions that require understanding relationships
-between memories, not just recalling individual facts.
-
-**When to traverse:**
-
-| User question pattern | Tool to use | What it answers |
-|-----------------------|-------------|-----------------|
-| "Why did we decide X?" | `kumiho_get_dependencies` on the decision | Shows what facts/assumptions X depends on |
-| "What would break if we change X?" | `kumiho_analyze_impact` on X | Shows all downstream decisions affected |
-| "How are X and Y related?" | `kumiho_find_path` between X and Y | Finds the shortest reasoning chain connecting them |
-| "What led to this conclusion?" | `kumiho_get_provenance_summary` | Extracts the full lineage (sources, models, parameters) |
-| "What depends on this assumption?" | `kumiho_get_dependents` on the assumption | Shows everything that would need revisiting |
-| "Show me all connections for X" | `kumiho_get_edges` with direction "both" | Lists all direct relationships |
-
-**Examples:**
-
-```
-# User asks: "Why did we go with Cloud Run?"
-result = kumiho_get_dependencies(
-  kref      = "kref://CognitiveMemory/decisions/deploy-cloud-run.decision?r=1",
-  max_depth = 3
-)
-# → Shows: DEPENDS_ON → use-grpc.decision → DERIVED_FROM → benchmark-results.fact
-# You answer: "We chose Cloud Run because of the gRPC decision, which itself
-#   came from the performance benchmarks we ran two weeks ago."
-
-# User asks: "If we switch from Neo4j to Postgres, what breaks?"
-result = kumiho_analyze_impact(
-  kref      = "kref://CognitiveMemory/decisions/use-neo4j.decision?r=1",
-  direction = "outgoing"
-)
-# → Returns downstream decisions sorted by proximity
-# You answer: "Switching from Neo4j would affect the graph traversal queries,
-#   the Dream State consolidation pipeline, and the hybrid search architecture."
-
-# User asks: "How is the auth token issue related to the deployment problem?"
-result = kumiho_find_path(
-  source_kref = "kref://CognitiveMemory/facts/auth-token-propagation.fact?r=1",
-  target_kref = "kref://CognitiveMemory/facts/deployment-failure.fact?r=1"
-)
-# → Returns the shortest edge chain connecting the two
-```
-
-**Weave results into natural conversation.** Don't dump raw graph output.
-Translate traversal results into plain reasoning: "We decided X because of
-Y, which was based on Z."
-
-### Agent output artifacts — persist what you produce (MANDATORY)
-
-**Design alignment**: BYO-Storage (paper §5.4.2), Principle 11 (Metadata
-Over Content). The graph stores pointers; the actual content lives as
-local files.
-
-Every significant output the agent generates — code, documents, analyses,
-plans, summaries, paper drafts, config files — **MUST** be persisted as a
-local artifact file and associated with a graph revision. Outputting content
-only in the chat response is not enough. Chat responses are ephemeral; the
-artifact is what your future self (and the user) can find again.
-
-**What counts as a significant output:**
-
-- Documents: paper drafts, reports, proposals, design docs, READMEs
-- Code: scripts, configurations, generated code, patches
-- Analyses: research summaries, comparison tables, benchmark results
-- Plans: implementation plans, roadmaps, architecture decisions
-- Creative: outlines, brainstorms, structured notes the user asked for
-
-**What does NOT need an artifact:**
-
-- Short answers to factual questions
-- Conversational responses
-- Minor clarifications or one-liners
-- Tool call results that are already stored elsewhere
-
-**The artifact creation flow (follow this every time):**
-
-1. **Write the output to disk** using the Write tool. Place it in the
-   artifact directory at a meaningful path:
-   ```
-   {artifact_dir}/{category}/{descriptive-name}.{ext}
-   ```
-   Examples:
-   - `~/.kumiho/artifacts/papers/cognitive-memory-v3-abstract.md`
-   - `~/.kumiho/artifacts/code/grpc-auth-middleware.rs`
-   - `~/.kumiho/artifacts/analyses/neo4j-vs-postgres-comparison.md`
-
-2. **Search for an existing item** (revision discipline — see above).
-
-3. **Create or update the revision** with the artifact attached:
-   ```
-   kumiho_create_revision(
-     item_kref = "kref://CognitiveMemory/papers/cognitive-memory.document",
-     metadata  = {
-       "summary":    "Updated abstract with reviewer feedback incorporated",
-       "type":       "document",
-       "format":     "markdown",
-       "generated_by": "agent"
-     },
-     artifact  = {
-       "location":     "/absolute/path/to/file.md",
-       "content_type": "text/markdown"
-     }
-   )
-   ```
-
-4. **Tag as published** — move the `published` tag to the new revision.
-
-5. **Link provenance** — create a `CREATED_FROM` edge from the artifact's
-   revision back to the conversation or input that produced it:
-   ```
-   kumiho_create_edge(
-     source_kref = "kref://CognitiveMemory/papers/cognitive-memory.document?r=3",
-     target_kref = "kref://CognitiveMemory/conversations/2026-02-11.conversation?r=1",
-     edge_type   = "CREATED_FROM"
-   )
-   ```
-
-**If the user iterates on the same output** (e.g., "revise the abstract",
-"update the plan"), do NOT create a new item. Stack a new revision on the
-existing item, write the updated artifact, and move the `published` tag.
-The revision history preserves every version automatically.
-
-### Procedural memory — storing tool executions
-
-When the agent runs a significant command, builds a project, deploys
-something, or executes a complex tool chain, **store the outcome** via
-`kumiho_memory_store_execution`. This creates procedural memory — the
-agent's record of *what it did and what happened*.
-
-**When to store executions:**
-
-- Build/compile results (especially failures — valuable for future sessions)
-- Deployment commands and their outcomes
-- Test runs with pass/fail summaries
-- Database migrations
-- Complex multi-step tool chains (e.g., "ran these 5 git commands to fix
-  the merge conflict")
-- Any command the user might ask about later: "What happened when we
-  deployed last time?"
-
-**When NOT to store:**
-
-- Trivial commands (`ls`, `git status`, reading files)
-- Commands that produced no meaningful outcome
-- Intermediate steps of a chain (store the chain summary, not each step)
-
-```
-kumiho_memory_store_execution(
-  user_id    = "<user_id>",
-  session_id = "<session_id>",
-  tool_name  = "cargo build --release",
-  status     = "done",
-  result     = "Build succeeded. 42 crates compiled in 3m 12s. Binary at target/release/kumiho-server.",
-  metadata   = {
-    "project": "kumiho-server",
-    "duration_seconds": 192,
-    "exit_code": 0
-  }
-)
-```
-
-Status values: `done` (success), `failed` (expected failure), `error`
-(unexpected failure), `blocked` (could not proceed).
-
-**Link executions to decisions.** If a build failure leads to a decision
-(e.g., "switch from OpenSSL to rustls"), create a DERIVED_FROM edge from
-the decision back to the execution record.
+See [Artifacts guide](references/artifacts.md) for the full creation
+flow, procedural memory patterns, and context compaction details.
 
 ---
 
@@ -674,10 +347,18 @@ the decision back to the execution record.
 |------|---------|
 | `kumiho_memory_ingest` | Store a user message, buffer in Redis, recall relevant long-term memories |
 | `kumiho_memory_add_response` | Store the assistant response for the session |
-| `kumiho_memory_consolidate` | Summarize, redact PII, persist to long-term graph storage |
-| `kumiho_memory_recall` | Search long-term memories by semantic query |
+| `kumiho_memory_consolidate` | Summarize, redact PII, persist to long-term graph storage. Follow with `kumiho_memory_discover_edges` |
+| `kumiho_memory_recall` | Search long-term memories by semantic query. Pass `graph_augmented: true` for multi-query + edge traversal. **Hold the krefs** for `source_revision_krefs` |
+| `kumiho_memory_store` | Store a memory with one call. Pass `source_revision_krefs` from recall to create edges at store time. Follow with `kumiho_memory_discover_edges` |
+| `kumiho_memory_retrieve` | Structured retrieval with filters (space, bundle, topic, mode: search/first/latest) |
+| `kumiho_memory_discover_edges` | **MANDATORY** after `kumiho_memory_store` and `kumiho_memory_consolidate`. Generates implication queries and creates edges to related memories |
 | `kumiho_memory_store_execution` | Store tool/command execution outcomes as procedural memory |
 | `kumiho_memory_dream_state` | Run offline consolidation (replay, assess, enrich, deprecate) |
+
+**`recall` vs `retrieve`**: Use `kumiho_memory_recall` for semantic search
+("find memories related to X"). Use `kumiho_memory_retrieve` when you need
+structured filtering — by space path, bundle, topic, memory type, or retrieval
+mode (`first` for oldest, `latest` for newest, `search` for relevance-ranked).
 
 ### Edges & relationships
 
@@ -697,6 +378,14 @@ the decision back to the execution record.
 | `kumiho_analyze_impact` | If this memory changes, what downstream memories are affected? |
 | `kumiho_get_provenance_summary` | Extract lineage summary (models, sources, parameters from upstream) |
 
+### Item lifecycle
+
+| Tool | Purpose |
+|------|---------|
+| `kumiho_deprecate_item` | Soft-deprecate an item (excluded from search) or restore it |
+| `kumiho_set_metadata` | Update metadata on an existing item or revision |
+| `kumiho_get_item_revisions` | View full version history of an item with tags |
+
 ### Graph structure (available from kumiho-python)
 
 | Tool | Purpose |
@@ -705,159 +394,25 @@ the decision back to the execution record.
 | `kumiho_create_revision` | Create a new revision (version) of an item |
 | `kumiho_tag_revision` | Apply a named pointer ("published", "current") to a revision |
 | `kumiho_get_revision_by_tag` | Resolve a tag to a specific revision |
+| `kumiho_get_revision_as_of` | Temporal query — which revision had a tag at a specific point in time |
 | `kumiho_search_items` | Search items by name, kind, metadata |
 | `kumiho_fulltext_search` | Full-text search across items, revisions, and artifacts |
+| `kumiho_resolve_kref` | Resolve a kref URI to a local file path |
+| `kumiho_get_artifacts` | Get all artifact references for a revision |
 
 ---
 
-## Conversation artifact generation (MUST enforce)
+## Conversation artifacts and session close
 
-**Design alignment**: BYO-Storage (paper §5.4.2), Local-First Privacy
-(§8.1), Principle 11 (Metadata Over Content), Principle 13 (One Tool Call,
-Complete Memory).
+At task boundaries or session end, generate a Markdown conversation
+artifact at `{artifact_dir}/{YYYY-MM-DD}/{session_id}.md` and
+consolidate via `kumiho_memory_consolidate`. After consolidation, call
+`kumiho_memory_discover_edges` on the result to link the session to
+related memories. Close with continuity — reference what's still open
+for next session.
 
-The graph stores **metadata and pointers** — raw conversation content stays
-**local** as a Markdown artifact. This is a core architectural requirement,
-and it's what allows your future self to have full context on what happened.
-
-### When to generate
-
-- **MUST** generate for any session with **2 or more meaningful exchanges**.
-- **Optional** for single trivial Q&A (e.g., "what time is it?").
-- Generate at **task boundaries** (end of a feature, bug fix, planning
-  session) or **before the session ends**.
-
-### Artifact storage path
-
-Resolve the artifact directory in this order:
-
-1. `artifact_dir` from the agent instruction metadata (set during onboarding)
-2. `KUMIHO_ARTIFACT_DIR` environment variable
-3. Default: `~/.kumiho/artifacts/`
-
-Files are organized by date: `{artifact_dir}/{YYYY-MM-DD}/{session_id}.md`
-
-### Markdown format
-
-```markdown
----
-session_id: "{session_id}"
-user_id: "{user_id}"
-agent_name: "{agent_name}"
-date: "{ISO_8601_datetime}"
-topics:
-  - topic1
-  - topic2
-summary: "One-line summary of the session"
----
-
-# {Brief session title}
-
-## Exchange 1
-
-**User:**
-{user_message_text}
-
-**Assistant:**
-{assistant_response_text}
-
-## Exchange 2
-
-**User:**
-{user_message_text}
-
-**Assistant:**
-{assistant_response_text}
-```
-
-### Generation steps
-
-1. **Compose the markdown** from the session's user/assistant exchanges.
-   - Include all substantive exchanges (skip trivial greetings-only turns).
-   - Write a brief title and one-line summary.
-   - Extract 2–5 topic keywords for the YAML frontmatter.
-
-2. **Write the file locally** using the Write tool:
-   - Path: `{artifact_dir}/{YYYY-MM-DD}/{session_id}.md`
-   - Create the directory first via Bash if it doesn't exist:
-     ```
-     mkdir -p ~/.kumiho/artifacts/2026-02-10
-     ```
-
-3. **Store the artifact pointer in the graph.** Use whichever tool is
-   available:
-
-   **Option A** — via `kumiho_memory_consolidate` (preferred if it accepts
-   artifact path):
-   ```
-   kumiho_memory_consolidate(
-     user_id      = "<stable_user_id>",
-     session_id   = "<session_id>",
-     artifact_path = "<local_path_to_markdown>"
-   )
-   ```
-
-   **Option B** — via lower-level graph tools:
-   ```
-   kumiho_create_item(
-     space_path = "CognitiveMemory/conversations",
-     item_name  = "<session_id>",
-     kind       = "conversation"
-   )
-
-   kumiho_create_revision(
-     item_kref = "kref://CognitiveMemory/conversations/<session_id>.conversation",
-     metadata  = {
-       "summary":  "<one-line summary>",
-       "topics":   ["topic1", "topic2"],
-       "keywords": ["keyword1", "keyword2"],
-       "type":     "conversation"
-     },
-     artifact  = {
-       "location":     "<absolute_local_path>",
-       "content_type": "text/markdown"
-     }
-   )
-   ```
-
-4. **Fallback**: If graph tools are not authenticated, **still write the local
-   markdown file**. BYO-storage means the local file is the source of truth;
-   the graph pointer can be created later when auth is available.
-
-### What the agent passes to memory tools
-
-For every assistant response during the session, call:
-```
-kumiho_memory_add_response(
-  user_id    = "<stable_user_id>",
-  session_id = "<session_id>",
-  response   = "<assistant_response_text>"
-)
-```
-
-Pass **raw text** — the agent is responsible for generating the final Markdown
-artifact. The memory tools handle summarization and graph storage internally;
-the Markdown artifact is the full-fidelity local record.
-
----
-
-## Session close
-
-When the session is ending (user says goodbye, task is complete, or
-conversation naturally concludes):
-
-1. **Generate the conversation artifact** (see above).
-2. **Consolidate** via `kumiho_memory_consolidate` to persist the session
-   summary to long-term graph storage.
-3. **Close with continuity.** Your sign-off should leave a thread to pick up:
-
-   > "Saved the session. Next time we can pick up from [specific open item
-   > or next step]. See you, {user_name}."
-
-   **Good**: "Logged everything. The Neo4j migration is ready to test —
-   want to pick that up next session?"
-
-   **Bad**: "Goodbye. Have a nice day."
+See [Conversation artifacts](references/conversation-artifacts.md) for
+the full markdown format, generation steps, and session close procedure.
 
 ---
 
@@ -865,24 +420,33 @@ conversation naturally concludes):
 
 1. **Bootstrap** — always run the session bootstrap above first.
 2. **Stable user_id** — use the same `user_id` for the same user across
-   sessions.
+   sessions. Session IDs are auto-generated by the memory manager — do not
+   construct them manually.
 3. **Recall first** — before responding to history-dependent questions,
    call `kumiho_memory_recall`. Use `kumiho_get_dependencies` or
    `kumiho_find_path` when the user needs to understand *why* something
    was decided or *how* two things are related.
 4. **Ingest continuously** — capture decisions, preferences, and project
    facts as they emerge via `kumiho_memory_ingest`.
-5. **Link the graph** — after ingesting decisions or facts, create edges
-   (`kumiho_create_edge`) to connect them to their evidence, dependencies,
-   or source conversations. Don't over-link — only meaningful relationships.
+5. **Link the graph at store time** — when calling `kumiho_memory_store`,
+   pass recall krefs from this turn as `source_revision_krefs` (Store &
+   Link Protocol). After storing decisions or important memories, call
+   `kumiho_memory_discover_edges` on the result. Use `kumiho_create_edge`
+   directly only for relationship types (`DEPENDS_ON`, `CREATED_FROM`)
+   that don't fit the store-time flow.
 6. **Store executions** — after significant tool runs (builds, deploys,
    tests), call `kumiho_memory_store_execution` with the outcome.
-7. **Add responses** — call `kumiho_memory_add_response` for assistant
-   responses that contain decisions, facts, or context worth preserving.
+7. **Store your answers with edges** — after giving a response worth
+   remembering, call `kumiho_memory_store` with recall krefs as
+   `source_revision_krefs`, then `kumiho_memory_discover_edges` on the
+   returned `revision_kref`. Also call `kumiho_memory_add_response` to
+   keep the session buffer in sync for eventual consolidation.
 8. **Artifact** — at task boundaries or session end, generate the
    conversation Markdown artifact.
-9. **Consolidate** — call `kumiho_memory_consolidate` after meaningful
-   exchanges to summarize and persist to long-term graph storage.
+9. **Consolidate & discover** — call `kumiho_memory_consolidate` after
+   meaningful exchanges. Then call `kumiho_memory_discover_edges` with
+   the consolidation's `revision_kref` and `summary` to link the session
+   to related memories in the graph.
 10. **Dream State** — run `/dream-state` periodically (or after heavy
     activity) to consolidate, enrich, and prune low-value memories.
     Use `/dream-state --dry-run` to preview without changes.
@@ -891,56 +455,25 @@ conversation naturally concludes):
 
 ## Privacy & trust
 
-The memory architecture is designed so that **users never have to wonder
-whether their data is safe**. These aren't just backend policies — they're
-promises you communicate to the user when relevant.
+- Raw conversations stay **local** (BYO-storage) — cloud stores only
+  summaries and pointers.
+- PII is redacted before reaching the cloud graph.
+- **Never** store credentials, tokens, or secrets.
+- Respect "forget X" immediately via `kumiho_deprecate_item`.
 
-### What stays local (BYO-storage)
+See [Privacy and trust](references/privacy-and-trust.md) for full
+data handling policies and user control options.
 
-- Full conversation transcripts (Markdown artifacts) — **local files only**.
-- Tool execution logs, images, voice recordings — never uploaded.
-- The cloud graph stores summaries, topic keywords, and artifact *pointers*
-  (file paths), **not content**.
+---
 
-If the user asks "where does my data go?", answer clearly: "Your full
-conversations stay on your machine at `{artifact_dir}`. The cloud only has
-short summaries and pointers to those local files."
+## Reference guides
 
-### What gets redacted
-
-PII (names, emails, addresses, phone numbers) is redacted from summaries
-before they reach the cloud graph. The redaction happens during the ingest
-pipeline — raw PII never crosses the privacy boundary.
-
-### What is never stored
-
-- Credentials, API keys, tokens, private keys, passwords
-- Payment details (card numbers, billing info)
-- Information the user explicitly marks as off-record
-
-If the user accidentally shares a secret in conversation, **do not ingest
-it**. Warn them: "That looks like a credential — I won't store that."
-
-### What to confirm before storing
-
-- Sensitive personal context (health, finances, relationships, legal matters)
-- Information about other people the user mentions
-- Anything the user prefaces with "don't remember this" or similar
-
-### User control
-
-- **"What do you know about me?"** — When asked, call `kumiho_memory_recall`
-  with a broad query and share what you find. Be transparent.
-- **"Forget X"** — Respect immediately. Use the appropriate deprecation tool
-  to mark the memory as deprecated. Acknowledge: "Done — I've removed that
-  from my active memory."
-- **"Don't remember this session"** — Skip artifact generation and
-  consolidation. Clear working memory via `kumiho_chat_clear`.
-
-### Immutable history (Principle 5)
-
-Nothing in the graph is silently overwritten. Old revisions are preserved
-even when beliefs are updated. This means the user (or an auditor) can
-always trace what was remembered, when, and why. Dream State consolidation
-has safety guards: published items are never auto-deprecated, and a circuit
-breaker caps bulk deprecation at 50% per run.
+| Guide | When to consult |
+|-------|-----------------|
+| [Onboarding flow](references/onboarding.md) | First session with a new user |
+| [Memory lifecycle](references/memory-lifecycle.md) | When storing or updating memories, auto-store criteria |
+| [Store & Link Protocol](references/store-and-link.md) | When storing any memory — mandatory edge creation workflow |
+| [Edges and traversal](references/edges-and-traversal.md) | When creating relationships, graph-augmented recall, or reasoning about connections |
+| [Artifacts guide](references/artifacts.md) | When persisting agent outputs, tool executions, or context compaction |
+| [Conversation artifacts](references/conversation-artifacts.md) | At session end or task boundaries |
+| [Privacy and trust](references/privacy-and-trust.md) | When user asks about data handling or wants to forget something |

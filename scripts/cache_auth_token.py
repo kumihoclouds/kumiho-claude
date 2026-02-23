@@ -119,7 +119,7 @@ def main() -> int:
     path = _write_credential(token, expires_at)
     print(f"API token cached at {path}", file=sys.stderr)
     print("Stored under the 'api_token' key (login session tokens are not affected).", file=sys.stderr)
-    print("The kumiho-cowork MCP server will pick this up on next restart.", file=sys.stderr)
+    print("The kumiho-claude MCP server will pick this up on next restart.", file=sys.stderr)
     return 0
 
 

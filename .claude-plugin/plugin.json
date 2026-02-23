@@ -1,12 +1,12 @@
 {
   "name": "kumiho-memory",
-  "version": "0.5.0",
-  "description": "Persistent graph-native memory for Claude — recalls context across sessions, stores decisions and preferences, and bootstraps identity at session start. Works in both Claude Code and Cowork.",
+  "version": "0.7.0",
+  "description": "Persistent graph-native memory for Claude — recalls context across sessions, stores decisions and preferences, and bootstraps identity at session start.",
   "author": {
     "name": "Kumiho Clouds",
     "url": "https://kumiho.io"
   },
-  "repository": "https://github.com/kumihoclouds/kumiho-cowork",
+  "repository": "https://github.com/kumihoclouds/kumiho-claude",
   "homepage": "https://docs.kumiho.io/python/mcp.html",
   "license": "MIT",
   "keywords": [

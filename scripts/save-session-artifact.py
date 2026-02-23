@@ -272,7 +272,7 @@ def main() -> int:
     output_path.write_text(markdown, encoding="utf-8")
 
     print(
-        f"[kumiho-cowork] Session artifact saved: {output_path}",
+        f"[kumiho-claude] Session artifact saved: {output_path}",
         file=sys.stderr,
     )
     return 0

@@ -1,8 +1,7 @@
-# Kumiho Memory — Plugin for Claude Code & Cowork
+# Kumiho Memory — Plugin for Claude Code
 
 Persistent graph-native memory plugin for Claude. Runs a local Kumiho MCP
-server with `kumiho-memory` — works in both **Claude Code** (CLI) and
-**Claude Cowork** (desktop autonomous agent).
+server with `kumiho-memory` for **Claude Code** (CLI).
 
 ## What it does
 
@@ -37,24 +36,24 @@ or upload the plugin directory manually in the Cowork settings.
 Install from local marketplace:
 
 ```bash
-claude plugin marketplace add ./kumiho-cowork
-claude plugin install kumiho-memory@kumiho-cowork --scope local
+claude plugin marketplace add ./kumiho-claude
+claude plugin install kumiho-memory@kumiho-claude --scope local
 ```
 
 Or run ad hoc without installing:
 
 ```bash
-claude --plugin-dir ./kumiho-cowork
+claude --plugin-dir ./kumiho-claude
 ```
 
 ## Runtime model
 
 - Bootstrap script: `scripts/run_kumiho_mcp.py`
 - Runtime home:
-  - Windows: `%LOCALAPPDATA%\kumiho-cowork`
-  - macOS/Linux: `$XDG_CACHE_HOME/kumiho-cowork` or `~/.cache/kumiho-cowork`
-- Override runtime home with: `KUMIHO_COWORK_HOME`
-- Override package spec with: `KUMIHO_COWORK_PACKAGE_SPEC`
+  - Windows: `%LOCALAPPDATA%\kumiho-claude`
+  - macOS/Linux: `$XDG_CACHE_HOME/kumiho-claude` or `~/.cache/kumiho-claude`
+- Override runtime home with: `KUMIHO_CLAUDE_HOME`
+- Override package spec with: `KUMIHO_CLAUDE_PACKAGE_SPEC`
 
 Default package spec:
 
@@ -81,7 +80,7 @@ under **API Keys**. Then either:
 2. Or cache it from the command line:
 
    ```bash
-   echo 'eyJ...' | python ./kumiho-cowork/scripts/cache_auth_token.py --stdin
+   echo 'eyJ...' | python ./kumiho-claude/scripts/cache_auth_token.py --stdin
    ```
 
 Both store the token under the `api_token` key in
@@ -165,13 +164,13 @@ YAML frontmatter (session_id, date, topics, summary) and structured
 If the bootstrap logs:
 
 ```text
-[kumiho-cowork] Searched N settings paths; none contained a usable env block.
+[kumiho-claude] Searched N settings paths; none contained a usable env block.
 ```
 
 Use `/kumiho-auth` to cache the token directly, or run:
 
 ```bash
-echo 'YOUR_JWT' | python ./kumiho-cowork/scripts/cache_auth_token.py --stdin
+echo 'YOUR_JWT' | python ./kumiho-claude/scripts/cache_auth_token.py --stdin
 ```
 
 ### Auth error (401)
@@ -212,11 +211,11 @@ and resolves endpoint from control-plane on every startup.
 
 ```bash
 # Claude Code only — validate plugin manifest:
-claude plugin validate ./kumiho-cowork/.claude-plugin/plugin.json
+claude plugin validate ./kumiho-claude/.claude-plugin/plugin.json
 
 # Both platforms — provision runtime and verify required modules:
 export KUMIHO_AUTH_TOKEN=YOUR_KUMIHO_BEARER_JWT
-python ./kumiho-cowork/scripts/run_kumiho_mcp.py --self-test
+python ./kumiho-claude/scripts/run_kumiho_mcp.py --self-test
 ```
 
 ## Discovery test with .env.local
@@ -224,13 +223,13 @@ python ./kumiho-cowork/scripts/run_kumiho_mcp.py --self-test
 Create a `.env.local` file (or copy from template):
 
 ```bash
-cp ./kumiho-cowork/.env.local.example ./.env.local
+cp ./kumiho-claude/.env.local.example ./.env.local
 ```
 
 Run:
 
 ```bash
-python ./kumiho-cowork/scripts/test_discovery_env.py --env-file .env.local
+python ./kumiho-claude/scripts/test_discovery_env.py --env-file .env.local
 ```
 
 The script prints `resolved_target` and exits non-zero if discovery resolves

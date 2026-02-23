@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Local discovery smoke test using .env.local credentials.
 
-Usage (from kumiho-cowork/ or repo root):
-    python kumiho-cowork/scripts/test_discovery_env.py --env-file .env.local
+Usage (from kumiho-claude/ or repo root):
+    python kumiho-claude/scripts/test_discovery_env.py --env-file .env.local
 
 Expected env keys in file:
     KUMIHO_AUTH_TOKEN=eyJ...
@@ -78,7 +78,7 @@ def _check_dns(target: str) -> tuple[bool, str]:
 
 
 def _request_discovery(token: str, discovery_url: str, tenant_hint: str, timeout: float) -> dict:
-    user_agent = (os.getenv("KUMIHO_COWORK_DISCOVERY_USER_AGENT", "") or "").strip() or "kumiho-cowork/0.4.0"
+    user_agent = (os.getenv("KUMIHO_CLAUDE_DISCOVERY_USER_AGENT", "") or "").strip() or "kumiho-claude/0.4.0"
     payload: dict[str, str] = {}
     if tenant_hint:
         payload["tenant_hint"] = tenant_hint
@@ -138,7 +138,7 @@ def main() -> int:
     control_plane_url = bootstrap._load_control_plane_url()
     discovery_url = bootstrap._build_discovery_url(control_plane_url)
     tenant_hint = args.tenant_hint or (os.getenv("KUMIHO_TENANT_HINT", "") or "").strip()
-    discovery_user_agent = (os.getenv("KUMIHO_COWORK_DISCOVERY_USER_AGENT", "") or "").strip() or "kumiho-cowork/0.4.0"
+    discovery_user_agent = (os.getenv("KUMIHO_CLAUDE_DISCOVERY_USER_AGENT", "") or "").strip() or "kumiho-claude/0.4.0"
 
     print(f"env_file: {env_path}")
     print(f"control_plane_url: {control_plane_url}")

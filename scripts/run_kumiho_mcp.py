@@ -20,22 +20,22 @@ from pathlib import Path
 
 DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.5 kumiho-memory[all]>=0.1.1"
 MARKER_FILE = ".installed-packages.txt"
-DEFAULT_DISCOVERY_USER_AGENT = "kumiho-cowork/0.4.0"
+DEFAULT_DISCOVERY_USER_AGENT = "kumiho-claude/0.4.0"
 
 
 def _state_dir() -> Path:
-    override = os.getenv("KUMIHO_COWORK_HOME", "").strip()
+    override = os.getenv("KUMIHO_CLAUDE_HOME", "").strip()
     if override:
         return Path(override).expanduser()
 
     if os.name == "nt":
         base = os.getenv("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        return Path(base) / "kumiho-cowork"
+        return Path(base) / "kumiho-claude"
 
     xdg = os.getenv("XDG_CACHE_HOME", "").strip()
     if xdg:
-        return Path(xdg) / "kumiho-cowork"
-    return Path.home() / ".cache" / "kumiho-cowork"
+        return Path(xdg) / "kumiho-claude"
+    return Path.home() / ".cache" / "kumiho-claude"
 
 
 def _venv_python(venv_dir: Path) -> Path:
@@ -77,7 +77,7 @@ def _install_dependencies(python_path: Path, package_spec: str) -> None:
 
 
 def _ensure_runtime() -> Path:
-    package_spec = os.getenv("KUMIHO_COWORK_PACKAGE_SPEC", "").strip() or DEFAULT_PACKAGE_SPEC
+    package_spec = os.getenv("KUMIHO_CLAUDE_PACKAGE_SPEC", "").strip() or DEFAULT_PACKAGE_SPEC
     state_dir = _state_dir()
     state_dir.mkdir(parents=True, exist_ok=True)
 
@@ -86,11 +86,11 @@ def _ensure_runtime() -> Path:
     python_path = _venv_python(venv_dir)
 
     if not python_path.exists():
-        print(f"[kumiho-cowork] Creating virtualenv: {venv_dir}", file=sys.stderr)
+        print(f"[kumiho-claude] Creating virtualenv: {venv_dir}", file=sys.stderr)
         venv.create(venv_dir, with_pip=True)
 
     if _needs_install(python_path, marker_path, package_spec):
-        print("[kumiho-cowork] Installing dependencies...", file=sys.stderr)
+        print("[kumiho-claude] Installing dependencies...", file=sys.stderr)
         _install_dependencies(python_path, package_spec)
         marker_path.write_text(package_spec, encoding="utf-8")
 
@@ -102,7 +102,7 @@ def _warn_auth() -> None:
     if auth_token:
         return
     print(
-        "[kumiho-cowork] Warning: KUMIHO_AUTH_TOKEN is not set. "
+        "[kumiho-claude] Warning: KUMIHO_AUTH_TOKEN is not set. "
         "Memory and graph operations will fail until a token is provided.",
         file=sys.stderr,
     )
@@ -134,7 +134,7 @@ def _validate_auth_token() -> None:
         return
 
     print(
-        "[kumiho-cowork] Warning: KUMIHO_AUTH_TOKEN does not look like a JWT. "
+        "[kumiho-claude] Warning: KUMIHO_AUTH_TOKEN does not look like a JWT. "
         "Use a dashboard-minted Kumiho API token.",
         file=sys.stderr,
     )
@@ -258,7 +258,7 @@ def _set_env_if_absent(key: str, value: str, source: str) -> bool:
     if not candidate or _looks_like_placeholder(candidate):
         return False
     os.environ[key] = candidate
-    print(f"[kumiho-cowork] Loaded {key} from {source}.", file=sys.stderr)
+    print(f"[kumiho-claude] Loaded {key} from {source}.", file=sys.stderr)
     return True
 
 
@@ -382,7 +382,7 @@ def _hydrate_env_from_claude_settings() -> None:
             return
     if not found_any:
         print(
-            f"[kumiho-cowork] Searched {len(candidates)} settings paths; "
+            f"[kumiho-claude] Searched {len(candidates)} settings paths; "
             "none contained a usable env block. "
             "Use /kumiho-auth or set KUMIHO_AUTH_TOKEN in ~/.kumiho/kumiho_authentication.json.",
             file=sys.stderr,
@@ -398,7 +398,7 @@ def _hydrate_env_from_local_config() -> None:
     if cached and (not env_auth or _looks_like_placeholder(env_auth)):
         os.environ["KUMIHO_AUTH_TOKEN"] = cached
         print(
-            "[kumiho-cowork] Loaded KUMIHO_AUTH_TOKEN from local Kumiho credential cache.",
+            "[kumiho-claude] Loaded KUMIHO_AUTH_TOKEN from local Kumiho credential cache.",
             file=sys.stderr,
         )
 
@@ -444,12 +444,12 @@ def _sync_token_to_mcp_json() -> None:
     try:
         mcp_path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
         print(
-            "[kumiho-cowork] Synced KUMIHO_AUTH_TOKEN into .mcp.json.",
+            "[kumiho-claude] Synced KUMIHO_AUTH_TOKEN into .mcp.json.",
             file=sys.stderr,
         )
     except Exception as exc:
         print(
-            f"[kumiho-cowork] Warning: could not sync token to .mcp.json: {exc}",
+            f"[kumiho-claude] Warning: could not sync token to .mcp.json: {exc}",
             file=sys.stderr,
         )
 
@@ -473,7 +473,7 @@ def _load_control_plane_url() -> str:
 
 
 def _load_discovery_user_agent() -> str:
-    raw = (os.getenv("KUMIHO_COWORK_DISCOVERY_USER_AGENT", "") or "").strip()
+    raw = (os.getenv("KUMIHO_CLAUDE_DISCOVERY_USER_AGENT", "") or "").strip()
     if not raw or _looks_like_placeholder(raw):
         return DEFAULT_DISCOVERY_USER_AGENT
     return raw
@@ -508,7 +508,7 @@ def _bootstrap_server_endpoint() -> None:
     preset_endpoint = os.getenv("KUMIHO_SERVER_ENDPOINT", "").strip() or os.getenv("KUMIHO_SERVER_ADDRESS", "").strip()
     if preset_endpoint:
         print(
-            "[kumiho-cowork] Ignoring pre-set KUMIHO_SERVER_ENDPOINT/KUMIHO_SERVER_ADDRESS; "
+            "[kumiho-claude] Ignoring pre-set KUMIHO_SERVER_ENDPOINT/KUMIHO_SERVER_ADDRESS; "
             "resolving endpoint via control-plane discovery.",
             file=sys.stderr,
         )
@@ -519,7 +519,7 @@ def _bootstrap_server_endpoint() -> None:
     token_candidates = _discovery_token_candidates()
     if not token_candidates:
         print(
-            "[kumiho-cowork] KUMIHO_AUTH_TOKEN is not set; skipping discovery bootstrap. "
+            "[kumiho-claude] KUMIHO_AUTH_TOKEN is not set; skipping discovery bootstrap. "
             "MCP tools will load, but authenticated calls will fail until token is provided.",
             file=sys.stderr,
         )
@@ -563,13 +563,13 @@ def _bootstrap_server_endpoint() -> None:
             if detail:
                 detail = f" {detail[:160]}"
             print(
-                f"[kumiho-cowork] Discovery candidate #{index} failed ({exc.code}).{detail}",
+                f"[kumiho-claude] Discovery candidate #{index} failed ({exc.code}).{detail}",
                 file=sys.stderr,
             )
             last_error = exc
         except Exception as exc:
             print(
-                f"[kumiho-cowork] Discovery candidate #{index} request error: {exc}",
+                f"[kumiho-claude] Discovery candidate #{index} request error: {exc}",
                 file=sys.stderr,
             )
             last_error = exc
@@ -604,13 +604,13 @@ def _bootstrap_server_endpoint() -> None:
     os.environ["KUMIHO_SERVER_ENDPOINT"] = resolved_target
     os.environ.pop("KUMIHO_SERVER_ADDRESS", None)
     print(
-        f"[kumiho-cowork] Resolved KUMIHO_SERVER_ENDPOINT={resolved_target} via discovery bootstrap.",
+        f"[kumiho-claude] Resolved KUMIHO_SERVER_ENDPOINT={resolved_target} via discovery bootstrap.",
         file=sys.stderr,
     )
 
 
 def _configure_llm_fallback() -> None:
-    if os.getenv("KUMIHO_COWORK_DISABLE_LLM_FALLBACK", "").strip().lower() in {"1", "true", "yes"}:
+    if os.getenv("KUMIHO_CLAUDE_DISABLE_LLM_FALLBACK", "").strip().lower() in {"1", "true", "yes"}:
         return
 
     key_vars = ("KUMIHO_LLM_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
@@ -618,10 +618,10 @@ def _configure_llm_fallback() -> None:
         return
 
     os.environ.setdefault("KUMIHO_LLM_PROVIDER", "openai")
-    os.environ.setdefault("OPENAI_API_KEY", "kumiho-cowork-fallback")
+    os.environ.setdefault("OPENAI_API_KEY", "kumiho-claude-fallback")
     os.environ.setdefault("KUMIHO_LLM_BASE_URL", "http://127.0.0.1:9/v1")
     print(
-        "[kumiho-cowork] No LLM API key detected. "
+        "[kumiho-claude] No LLM API key detected. "
         "Using fail-fast local fallback for summarization.",
         file=sys.stderr,
     )
@@ -644,7 +644,7 @@ def main() -> int:
         _bootstrap_server_endpoint()
     except RuntimeError as exc:
         print(
-            "[kumiho-cowork] Discovery bootstrap failed. "
+            "[kumiho-claude] Discovery bootstrap failed. "
             "Starting MCP server without pre-resolved endpoint. "
             f"Error: {exc}",
             file=sys.stderr,

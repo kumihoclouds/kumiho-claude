@@ -22,10 +22,10 @@ This plugin uses one local MCP server:
 
 - `KUMIHO_CONTROL_PLANE_URL` (default: `https://control.kumiho.cloud`)
 - `KUMIHO_MCP_LOG_LEVEL` (default: `INFO`)
-- `KUMIHO_COWORK_HOME` (override runtime directory)
-- `KUMIHO_COWORK_PACKAGE_SPEC` (override package install spec)
-- `KUMIHO_COWORK_DISABLE_LLM_FALLBACK` (disable local no-key LLM fallback mode)
-- `KUMIHO_COWORK_DISCOVERY_USER_AGENT` (override discovery HTTP User-Agent)
+- `KUMIHO_CLAUDE_HOME` (override runtime directory)
+- `KUMIHO_CLAUDE_PACKAGE_SPEC` (override package install spec)
+- `KUMIHO_CLAUDE_DISABLE_LLM_FALLBACK` (disable local no-key LLM fallback mode)
+- `KUMIHO_CLAUDE_DISCOVERY_USER_AGENT` (override discovery HTTP User-Agent)
 
 `KUMIHO_SERVER_ENDPOINT` and `KUMIHO_SERVER_ADDRESS` are intentionally ignored by
 the launcher to enforce control-plane discovery routing.
@@ -52,7 +52,7 @@ If direct memory-store calls fail with `StatusCode.UNAVAILABLE` to
 
 If discovery returns Cloudflare `error code: 1010`, your edge rules are likely
 blocking the default Python user-agent. The launcher uses a custom user-agent;
-you can override it with `KUMIHO_COWORK_DISCOVERY_USER_AGENT`.
+you can override it with `KUMIHO_CLAUDE_DISCOVERY_USER_AGENT`.
 
 You can validate discovery directly with:
-`python ./kumiho-cowork/scripts/test_discovery_env.py --env-file .env.local`
+`python ./kumiho-claude/scripts/test_discovery_env.py --env-file .env.local`
