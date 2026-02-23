@@ -1,70 +1,90 @@
 # Kumiho Memory — Plugin for Claude Code
 
 Persistent graph-native memory plugin for Claude. Runs a local Kumiho MCP
-server with `kumiho-memory` for **Claude Code** (CLI).
+server with `kumiho-memory` so Claude **remembers you across sessions**.
+
+Version: **0.7.0** | Requires: `kumiho>=0.9.7`, `kumiho-memory>=0.3.0`
 
 ## What it does
 
 - Bootstraps user identity and preferences at session start
 - Recalls context from previous sessions via semantic graph search
 - Stores decisions, preferences, and project facts automatically
-- Generates local conversation artifacts (BYO-storage model)
+- Generates local conversation artifacts (BYO-storage — raw transcripts stay on your machine)
 - Runs Dream State consolidation for memory hygiene
+- Auto-approves Kumiho memory tool calls (no permission prompts)
 
 ## Platform compatibility
 
-| Feature | Claude Code | Claude Cowork |
-| ------- | ----------- | ------------- |
+| Feature | Claude Code (CLI + VS Code) | Claude Desktop |
+| ------- | --------------------------- | -------------- |
 | MCP memory tools | Yes | Yes |
-| Session bootstrap | Yes | Yes |
-| Artifact generation | Yes | Yes |
+| Session bootstrap hook | Yes | Yes |
+| Session-end artifact hook | Yes | Yes |
 | `/kumiho-auth` command | Yes | Yes |
 | `/memory-capture` command | Yes | Yes |
 | `/dream-state` command | Yes | Yes |
-| Auto-approve memory ops | Yes | No (Cowork manages permissions differently) |
-| `.claude/settings.json` auth | Yes | No (use `.env.local` instead) |
+| Auto-approve memory ops | Yes | No (Desktop manages permissions differently) |
+| `.claude/settings.json` env | Yes | No (use `.env.local` instead) |
 
 ## Installation
 
-### Claude Cowork
-
-Install from the [plugin marketplace](https://claude.com/plugins-for/cowork),
-or upload the plugin directory manually in the Cowork settings.
-
 ### Claude Code
 
-Install from local marketplace:
+Install from GitHub:
 
 ```bash
-claude plugin marketplace add ./kumiho-claude
-claude plugin install kumiho-memory@kumiho-claude --scope local
+claude plugin add github:kumihoclouds/kumiho-claude
 ```
 
-Or run ad hoc without installing:
+### Local development
+
+Run ad hoc without installing:
 
 ```bash
 claude --plugin-dir ./kumiho-claude
 ```
 
+## Hooks
+
+The plugin registers three hooks that run automatically:
+
+| Hook | Script | Purpose |
+|------|--------|---------|
+| `SessionStart` | `session-bootstrap.py` | Loads auth token, runs control-plane discovery, hints the agent to load user identity |
+| `SessionEnd` | `save-session-artifact.py` | Saves conversation as a local Markdown artifact |
+| `PermissionRequest` | `auto-approve-memory.py` | Auto-approves Kumiho memory MCP tool calls (`kumiho_*`) |
+
+## Slash commands
+
+| Command | Description |
+|---------|-------------|
+| `/kumiho-auth` | Interactive auth setup — paste a dashboard API token or use CLI login |
+| `/memory-capture` | Capture a specific fact or preference into long-term memory |
+| `/dream-state` | Run Dream State consolidation (review, enrich, prune stored memories) |
+
 ## Runtime model
 
-- Bootstrap script: `scripts/run_kumiho_mcp.py`
-- Runtime home:
+The bootstrap script (`scripts/run_kumiho_mcp.py`) creates an isolated
+virtualenv, installs the required Python packages, resolves the Kumiho
+gRPC endpoint via control-plane discovery, and launches the MCP server.
+
+- **Runtime home:**
   - Windows: `%LOCALAPPDATA%\kumiho-claude`
   - macOS/Linux: `$XDG_CACHE_HOME/kumiho-claude` or `~/.cache/kumiho-claude`
-- Override runtime home with: `KUMIHO_CLAUDE_HOME`
-- Override package spec with: `KUMIHO_CLAUDE_PACKAGE_SPEC`
+- **Override runtime home:** `KUMIHO_CLAUDE_HOME`
+- **Override package spec:** `KUMIHO_CLAUDE_PACKAGE_SPEC`
 
 Default package spec:
 
 ```text
-kumiho[mcp]>=0.9.5 kumiho-memory[all]>=0.1.1
+kumiho[mcp]>=0.9.7 kumiho-memory[all]>=0.3.0
 ```
 
-## Authentication setup
+## Authentication
 
-There are two independent ways to authenticate. Use whichever fits your
-workflow — or run `/kumiho-auth` and it will walk you through both options.
+There are two ways to authenticate. Use whichever fits your workflow — or
+run `/kumiho-auth` and it will walk you through both options.
 
 ### Method A — Dashboard API token (recommended)
 
@@ -131,20 +151,23 @@ Both raw JWT and `"Bearer <jwt>"` formats are accepted.
 The plugin starts without a token so tools remain visible, but authenticated
 memory/graph operations require a valid token.
 
-For higher-quality summarization, set either:
+### LLM provider for summarization
+
+For higher-quality summarization during memory consolidation, set either:
 
 - `OPENAI_API_KEY` (default provider path), or
 - `ANTHROPIC_API_KEY` with `KUMIHO_LLM_PROVIDER=anthropic`.
 
 If no LLM key is set, the launcher enables a local fail-fast fallback so MCP
-tools still initialize without external LLM credentials.
+tools still initialize without external LLM credentials. In Claude Code, the
+host agent (Claude itself) handles query reformulation and edge discovery
+natively — no external LLM key needed for those features.
 
 ## Conversation artifacts
 
 The plugin follows a **BYO-storage** model: raw conversation content is stored
 locally as Markdown files; the cloud graph stores only metadata and artifact
-pointers. This aligns with the Graph-Native Cognitive Memory architecture
-(Principle 11: Metadata Over Content).
+pointers.
 
 Artifacts are saved to `~/.kumiho/artifacts/{YYYY-MM-DD}/` by default.
 Override with `KUMIHO_ARTIFACT_DIR`:
@@ -156,6 +179,30 @@ export KUMIHO_ARTIFACT_DIR=.kumiho/artifacts
 Each session with 2+ meaningful exchanges produces a Markdown artifact with
 YAML frontmatter (session_id, date, topics, summary) and structured
 `## Exchange N` sections.
+
+## Environment variables
+
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `KUMIHO_AUTH_TOKEN` | JWT bearer token for authenticated memory/graph calls |
+
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KUMIHO_CONTROL_PLANE_URL` | `https://control.kumiho.cloud` | Control plane URL |
+| `KUMIHO_TENANT_HINT` | *(auto)* | Tenant slug or UUID for multi-tenant setups |
+| `KUMIHO_MCP_LOG_LEVEL` | `INFO` | MCP server log level |
+| `KUMIHO_CLAUDE_HOME` | *(platform default)* | Override runtime/venv directory |
+| `KUMIHO_CLAUDE_PACKAGE_SPEC` | *(see above)* | Override pip install spec |
+| `KUMIHO_CLAUDE_DISABLE_LLM_FALLBACK` | *(unset)* | Set to `1` to disable local no-key LLM fallback |
+| `KUMIHO_CLAUDE_DISCOVERY_USER_AGENT` | `kumiho-claude/0.4.0` | Override discovery HTTP User-Agent |
+| `KUMIHO_ARTIFACT_DIR` | `~/.kumiho/artifacts/` | Override conversation artifact directory |
+
+`KUMIHO_SERVER_ENDPOINT` and `KUMIHO_SERVER_ADDRESS` are intentionally
+ignored by the launcher to enforce control-plane discovery routing.
 
 ## Troubleshooting
 
@@ -181,8 +228,6 @@ If you see:
 Memory proxy error 401: {"error":"invalid_id_token"}
 ```
 
-then your token is invalid for the deployed control-plane auth path.
-
 Fix options:
 
 1. Use a fresh dashboard-minted token via `/kumiho-auth`.
@@ -196,7 +241,7 @@ If you see:
 StatusCode.UNAVAILABLE ... 127.0.0.1:8080 ... Connection refused
 ```
 
-then Kumiho SDK discovery did not resolve a cloud gRPC endpoint.
+Then Kumiho SDK discovery did not resolve a cloud gRPC endpoint.
 
 Fix options:
 
@@ -207,56 +252,63 @@ If you see DNS failures for `us-central.kumiho.cloud`, a stale endpoint override
 likely present. This plugin ignores `KUMIHO_SERVER_ENDPOINT`/`KUMIHO_SERVER_ADDRESS`
 and resolves endpoint from control-plane on every startup.
 
+### Cloudflare 1010 error
+
+If discovery returns Cloudflare `error code: 1010`, edge rules are blocking
+the default Python user-agent. Override with `KUMIHO_CLAUDE_DISCOVERY_USER_AGENT`.
+
 ## Validation and smoke test
 
 ```bash
-# Claude Code only — validate plugin manifest:
+# Claude Code — validate plugin manifest:
 claude plugin validate ./kumiho-claude/.claude-plugin/plugin.json
 
-# Both platforms — provision runtime and verify required modules:
+# Provision runtime and verify required modules:
 export KUMIHO_AUTH_TOKEN=YOUR_KUMIHO_BEARER_JWT
 python ./kumiho-claude/scripts/run_kumiho_mcp.py --self-test
-```
 
-## Discovery test with .env.local
-
-Create a `.env.local` file (or copy from template):
-
-```bash
-cp ./kumiho-claude/.env.local.example ./.env.local
-```
-
-Run:
-
-```bash
+# Test discovery with .env.local:
 python ./kumiho-claude/scripts/test_discovery_env.py --env-file .env.local
 ```
-
-The script prints `resolved_target` and exits non-zero if discovery resolves
-to localhost or cannot resolve a valid Kumiho server target.
 
 ## Structure
 
 ```text
 .
 ├── .claude-plugin/
-│   ├── plugin.json
-│   └── marketplace.json
-├── .mcp.json
+│   ├── plugin.json            # Plugin manifest (name, version, entry points)
+│   └── marketplace.json       # Marketplace metadata
+├── .mcp.json                  # MCP server definition (kumiho-memory stdio)
+├── .env.local.example         # Template for local auth config
 ├── commands/
-│   ├── kumiho-auth.md
-│   ├── memory-capture.md
-│   └── dream-state.md
+│   ├── kumiho-auth.md         # /kumiho-auth slash command
+│   ├── memory-capture.md      # /memory-capture slash command
+│   └── dream-state.md         # /dream-state slash command
 ├── hooks/
-│   └── hooks.json
+│   └── hooks.json             # SessionStart, SessionEnd, PermissionRequest hooks
 ├── skills/
-│   └── kumiho-memory/SKILL.md
-└── scripts/
-    ├── run_kumiho_mcp.py
-    ├── session-bootstrap.py
-    ├── save-session-artifact.py
-    ├── auto-approve-memory.py
-    ├── cache_auth_token.py
-    ├── patch_mcp_json_token.py
-    └── test_discovery_env.py
+│   └── kumiho-memory/
+│       ├── SKILL.md           # Core behavioral instructions
+│       └── references/
+│           ├── artifacts.md               # Agent output artifact guidelines
+│           ├── conversation-artifacts.md   # Conversation artifact format
+│           ├── edges-and-traversal.md     # Graph edge types and traversal
+│           ├── memory-lifecycle.md        # Memory lifecycle tools reference
+│           ├── onboarding.md             # First-session onboarding flow
+│           ├── privacy-and-trust.md      # Privacy guarantees and data handling
+│           └── store-and-link.md         # Store and link patterns
+├── scripts/
+│   ├── run_kumiho_mcp.py         # Bootstrap launcher (venv, install, discovery, MCP)
+│   ├── session-bootstrap.py      # SessionStart hook
+│   ├── save-session-artifact.py  # SessionEnd hook
+│   ├── auto-approve-memory.py    # PermissionRequest hook
+│   ├── cache_auth_token.py       # CLI token caching utility
+│   ├── patch_mcp_json_token.py   # Write resolved token into .mcp.json
+│   └── test_discovery_env.py     # Discovery smoke test
+├── CONNECTORS.md                 # MCP connector details and env reference
+└── README.md
 ```
+
+## License
+
+MIT

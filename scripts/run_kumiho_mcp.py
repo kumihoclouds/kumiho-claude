@@ -18,7 +18,7 @@ import venv
 from pathlib import Path
 
 
-DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.5 kumiho-memory[all]>=0.1.1"
+DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.7 kumiho-memory[all]>=0.3.0"
 MARKER_FILE = ".installed-packages.txt"
 DEFAULT_DISCOVERY_USER_AGENT = "kumiho-claude/0.4.0"
 
