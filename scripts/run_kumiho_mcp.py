@@ -20,7 +20,7 @@ from pathlib import Path
 
 DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.7 kumiho-memory[all]>=0.3.0"
 MARKER_FILE = ".installed-packages.txt"
-DEFAULT_DISCOVERY_USER_AGENT = "kumiho-claude/0.7.3"
+DEFAULT_DISCOVERY_USER_AGENT = "kumiho-claude/0.7.4"
 
 
 def _state_dir() -> Path:
