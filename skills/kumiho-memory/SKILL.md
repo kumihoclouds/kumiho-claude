@@ -102,97 +102,16 @@ thread.
 
 ---
 
-## Session bootstrap (ONE-TIME — runs only when this skill is first invoked)
+## Session bootstrap (ALREADY COMPLETED — do not re-run)
 
-**This section runs EXACTLY ONCE per session** — when the Skill tool first
-loads this document. Once `agent.instruction` has been fetched and identity
-metadata parsed, **do NOT fetch it again** for the rest of the session.
-The identity fields (agent_name, user_name, communication_tone, etc.) are
-already in your context after the first load. Re-fetching is wasteful and
-adds latency to every turn.
+The bootstrap ran when this skill was first invoked. Your identity is
+already loaded — user_name, agent_name, communication_tone, and all other
+fields from `agent.instruction` are in your context. **Do NOT call
+`kumiho_get_revision_by_tag` for `agent.instruction` again.** It does not
+change mid-session. Re-fetching it wastes tokens and adds latency.
 
-At the very beginning of each chat session, **before** responding to the
-user's first message, perform the following steps in order:
-
-### Step 1 — Auth check & identity load
-
-Fetch the agent instruction document:
-
-```
-kumiho_get_revision_by_tag(
-  item_kref = "kref://CognitiveMemory/agent.instruction",
-  tag       = "published"
-)
-```
-
-**Interpret the result:**
-
-| Result | Meaning | Action |
-|--------|---------|--------|
-| Revision returned | Auth works, identity exists | Parse metadata, proceed to **Step 2** (returning user greeting). |
-| Item/tag not found | Auth works, first session | Proceed to [Onboarding flow](references/onboarding.md). |
-| Auth/connection error | Token missing or invalid | Show a soft warning (see below), then assist normally. |
-
-**Soft auth warning** (non-blocking):
-
-> "I couldn't connect to Kumiho memory — your token may be missing or
-> expired. You can set it up anytime with `/kumiho-auth` (paste a dashboard
-> API token, or use `kumiho-cli login` for email/password). I'll still help
-> you with everything, but I won't be able to remember this conversation
-> for next time."
-
-Do **not** block the session. The user can still work; memory tools will
-simply fail gracefully until auth is resolved.
-
-### Step 2 — Returning user greeting
-
-This is what separates a tool from a collaborator. When the identity loads:
-
-1. **Parse** the metadata fields (see table below) and adopt the agent
-   identity and communication style.
-
-2. **Recall recent context** — call `kumiho_memory_recall` with a broad
-   query related to the user's current project or recent activity. Use the
-   user's name, role, and any topic keywords from the last session.
-
-3. **Greet with continuity.** Your first message should:
-   - Address the user by name.
-   - Reference something specific from recent memory (last session's topic,
-     an open decision, a project milestone).
-   - If there's an unresolved thread, surface it: "Last time we were working
-     on X — want to pick that up, or is there something new?"
-   - If no recent memories exist, a warm personalized greeting is fine:
-     "Hey {user_name}, what are we working on today?"
-
-   **Good**: "Hey Youngbin — last session we got the discovery bootstrap
-   working. Did the DNS resolution hold up in production?"
-
-   **Bad**: "Hello. How can I help you today?"
-
-**IMPORTANT — do NOT narrate the bootstrap process.** The user should never
-see messages like "Let me load your memory", "I'm recalling who you are",
-"I've loaded my persistent memory", or "Let me run the session bootstrap."
-All MCP calls (auth check, recall) happen silently. The user's first
-impression should be that you already know them — not that you just looked
-them up. You are a colleague who recognizes them when they walk in, not
-someone reading a name tag.
-
-### Identity metadata fields
-
-| Field                  | Description                                          |
-|------------------------|------------------------------------------------------|
-| `agent_name`           | Name the AI should use for itself                    |
-| `user_name`            | Name to address the human user                       |
-| `user_languages`       | Comma-separated language(s) the user speaks          |
-| `communication_tone`   | casual · professional · balanced                     |
-| `verbosity`            | concise · balanced · detailed                        |
-| `user_role`            | User's role or expertise area                        |
-| `user_expertise_level` | beginner · intermediate · advanced                   |
-| `primary_tools`        | Tools/environment the user works with (auto-inferred)|
-| `artifact_dir`         | Local path for conversation Markdown artifacts       |
-| `timezone`             | User's timezone (IANA format)                        |
-| `interaction_rules`    | Freeform dos/don'ts for the agent                    |
-| `memory_behaviour`     | How aggressively to store new memories               |
+If you need the full bootstrap procedure (first-session onboarding, auth
+failure handling), see [Bootstrap procedure](references/bootstrap.md).
 
 ---
 
@@ -430,7 +349,7 @@ the full markdown format, generation steps, and session close procedure.
 
 ## Recommended session pattern
 
-1. **Bootstrap** — always run the session bootstrap above first.
+1. **Bootstrap** — already completed when this skill loaded (see above).
 2. **Stable user_id** — use the same `user_id` for the same user across
    sessions. Session IDs are auto-generated by the memory manager — do not
    construct them manually.
@@ -482,6 +401,7 @@ data handling policies and user control options.
 
 | Guide | When to consult |
 |-------|-----------------|
+| [Bootstrap procedure](references/bootstrap.md) | First-message identity load and auth check (already done) |
 | [Onboarding flow](references/onboarding.md) | First session with a new user |
 | [Memory lifecycle](references/memory-lifecycle.md) | When storing or updating memories, auto-store criteria |
 | [Store & Link Protocol](references/store-and-link.md) | When storing any memory — mandatory edge creation workflow |
