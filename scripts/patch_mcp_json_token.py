@@ -47,9 +47,31 @@ def _mcp_json_path() -> Path:
 
 
 def _claude_desktop_config_paths() -> list[Path]:
-    """Return platform-specific Claude Desktop global config paths."""
+    """Return platform-specific Claude Desktop global config paths.
+
+    On Windows MSIX installs, Claude Desktop reads from a virtualised
+    path under LocalAppData\\Packages instead of the standard %APPDATA%
+    location.  We check the MSIX path first (more specific), then the
+    standard path.
+    """
     paths: list[Path] = []
     if os.name == "nt":
+        # MSIX virtualised path (Windows Store / official installer).
+        # Claude Desktop actually reads from here, even though its
+        # "Edit Config" button opens the %APPDATA% path (known bug).
+        local_appdata = os.getenv("LOCALAPPDATA", "")
+        if local_appdata:
+            msix_base = Path(local_appdata) / "Packages"
+            if msix_base.exists():
+                for entry in msix_base.iterdir():
+                    if entry.name.startswith("Claude_") and entry.is_dir():
+                        candidate = (
+                            entry / "LocalCache" / "Roaming" / "Claude"
+                            / "claude_desktop_config.json"
+                        )
+                        paths.append(candidate)
+                        break
+        # Standard (non-MSIX) path.
         appdata = os.getenv("APPDATA", "")
         if appdata:
             paths.append(Path(appdata) / "Claude" / "claude_desktop_config.json")
@@ -175,10 +197,6 @@ def _patch_config_file(config_path: Path, token: str) -> bool:
         )
     else:
         print(f"Patched KUMIHO_AUTH_TOKEN in {config_path}.", file=sys.stderr)
-        print(
-            "Claude Desktop will detect the change and restart the MCP server.",
-            file=sys.stderr,
-        )
 
     return True
 

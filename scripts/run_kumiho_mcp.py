@@ -408,9 +408,28 @@ def _hydrate_env_from_local_config() -> None:
 
 
 def _claude_desktop_config_paths() -> list[Path]:
-    """Return platform-specific Claude Desktop global config paths."""
+    """Return platform-specific Claude Desktop global config paths.
+
+    On Windows MSIX installs, Claude Desktop reads from a virtualised
+    path under LocalAppData\\Packages instead of the standard %APPDATA%
+    location.  We check the MSIX path first, then the standard path.
+    """
     paths: list[Path] = []
     if os.name == "nt":
+        # MSIX virtualised path (Windows Store / official installer).
+        local_appdata = os.getenv("LOCALAPPDATA", "")
+        if local_appdata:
+            msix_base = Path(local_appdata) / "Packages"
+            if msix_base.exists():
+                for entry in msix_base.iterdir():
+                    if entry.name.startswith("Claude_") and entry.is_dir():
+                        candidate = (
+                            entry / "LocalCache" / "Roaming" / "Claude"
+                            / "claude_desktop_config.json"
+                        )
+                        paths.append(candidate)
+                        break
+        # Standard (non-MSIX) path.
         appdata = os.getenv("APPDATA", "")
         if appdata:
             paths.append(Path(appdata) / "Claude" / "claude_desktop_config.json")
@@ -566,6 +585,10 @@ def _bootstrap_server_endpoint() -> None:
             "MCP tools will load, but authenticated calls will fail until token is provided.",
             file=sys.stderr,
         )
+        # Set a sentinel endpoint so the SDK does NOT fall back to
+        # localhost:8080.  The .invalid TLD is guaranteed to never
+        # resolve (RFC 6761), producing a clear "not connected" error.
+        os.environ["KUMIHO_SERVER_ENDPOINT"] = "needs-auth.kumiho.invalid:443"
         return
 
     control_plane_url = _load_control_plane_url()
@@ -709,9 +732,11 @@ def main() -> int:
     try:
         _bootstrap_server_endpoint()
     except RuntimeError as exc:
+        # Prevent SDK from falling back to localhost:8080.
+        os.environ["KUMIHO_SERVER_ENDPOINT"] = "needs-auth.kumiho.invalid:443"
         print(
             "[kumiho-claude] Discovery bootstrap failed. "
-            "Starting MCP server without pre-resolved endpoint. "
+            "Run /kumiho-auth to set up authentication. "
             f"Error: {exc}",
             file=sys.stderr,
         )

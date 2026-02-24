@@ -77,12 +77,10 @@ prefer. Present exactly these two options:
 4. **Report results concisely** -- one short summary, not a step-by-step
    narration. Examples:
 
-   - All succeeded: "Token stored. The MCP server should restart
-     automatically. If memory tools still don't connect, fully quit and
-     relaunch the app."
-   - Cache succeeded but file writes failed (read-only FS): "Token cached
-     successfully. You may need to restart the app for the MCP server to
-     pick it up."
+   - All succeeded (Claude Code): "Token stored. Start a new session
+     and memory will connect automatically."
+   - Cache succeeded but file writes failed (Claude Desktop / Cowork):
+     "Token stored. Quit and relaunch the app for memory to connect."
    - Cache failed: relay the error and ask the user to double-check their
      token.
 
