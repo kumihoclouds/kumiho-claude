@@ -407,55 +407,94 @@ def _hydrate_env_from_local_config() -> None:
         )
 
 
-def _sync_token_to_mcp_json() -> None:
-    """Write the resolved token into .mcp.json so Claude Desktop picks it up.
+def _claude_desktop_config_paths() -> list[Path]:
+    """Return platform-specific Claude Desktop global config paths."""
+    paths: list[Path] = []
+    if os.name == "nt":
+        appdata = os.getenv("APPDATA", "")
+        if appdata:
+            paths.append(Path(appdata) / "Claude" / "claude_desktop_config.json")
+    else:
+        paths.append(
+            Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+        )
+        xdg_config = os.getenv("XDG_CONFIG_HOME", "")
+        if xdg_config:
+            paths.append(Path(xdg_config) / "Claude" / "claude_desktop_config.json")
+        else:
+            paths.append(Path.home() / ".config" / "Claude" / "claude_desktop_config.json")
+    return paths
 
-    On Claude Desktop (macOS) the host does not expand ``${VAR:-}``
-    templates.  If the token was loaded from the credential cache or
-    ``.env.local``, ``.mcp.json`` still contains the unresolved
-    placeholder.  Writing the real token ensures that future server
-    restarts get the token directly from the env block without needing
-    the fallback hunt.
+
+def _try_sync_token_to_config(config_path: Path, token: str) -> bool:
+    """Attempt to write *token* into a single MCP config file.
+
+    Returns True on success, False on any error.
+    """
+    if not config_path.exists():
+        return False
+
+    try:
+        body = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+
+    servers = body.get("mcpServers")
+    if not isinstance(servers, dict):
+        return False
+
+    server = None
+    for name in ("kumiho-memory", "kumiho"):
+        entry = servers.get(name)
+        if isinstance(entry, dict):
+            server = entry
+            break
+    if server is None:
+        return False
+
+    env = server.get("env")
+    if not isinstance(env, dict):
+        return False
+
+    current = (env.get("KUMIHO_AUTH_TOKEN") or "").strip()
+    if current == token:
+        return True  # already in sync
+
+    env["KUMIHO_AUTH_TOKEN"] = token
+    try:
+        config_path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+        print(
+            f"[kumiho-claude] Synced KUMIHO_AUTH_TOKEN into {config_path.name}.",
+            file=sys.stderr,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _sync_token_to_mcp_json() -> None:
+    """Write the resolved token into MCP config so Claude Desktop picks it up.
+
+    Tries the plugin-local ``.mcp.json`` first.  If that fails (read-only
+    filesystem), falls back to the Claude Desktop global config.
     """
     token = _clean_token_candidate((os.getenv("KUMIHO_AUTH_TOKEN", "") or "").strip())
     if not token or _looks_like_placeholder(token):
         return
 
-    mcp_path = _plugin_root() / ".mcp.json"
-    if not mcp_path.exists():
+    # Try plugin-local .mcp.json first
+    if _try_sync_token_to_config(_plugin_root() / ".mcp.json", token):
         return
 
-    try:
-        body = json.loads(mcp_path.read_text(encoding="utf-8"))
-    except Exception:
-        return
+    # Fallback: Claude Desktop global config
+    for desktop_path in _claude_desktop_config_paths():
+        if _try_sync_token_to_config(desktop_path, token):
+            return
 
-    servers = body.get("mcpServers")
-    if not isinstance(servers, dict):
-        return
-    server = servers.get("kumiho-memory")
-    if not isinstance(server, dict):
-        return
-    env = server.get("env")
-    if not isinstance(env, dict):
-        return
-
-    current = (env.get("KUMIHO_AUTH_TOKEN") or "").strip()
-    if current == token:
-        return  # already in sync
-
-    env["KUMIHO_AUTH_TOKEN"] = token
-    try:
-        mcp_path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
-        print(
-            "[kumiho-claude] Synced KUMIHO_AUTH_TOKEN into .mcp.json.",
-            file=sys.stderr,
-        )
-    except Exception as exc:
-        print(
-            f"[kumiho-claude] Warning: could not sync token to .mcp.json: {exc}",
-            file=sys.stderr,
-        )
+    print(
+        "[kumiho-claude] Warning: could not sync token to any MCP config file.",
+        file=sys.stderr,
+    )
 
 
 def _build_discovery_url(base_url: str) -> str:

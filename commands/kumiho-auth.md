@@ -35,9 +35,9 @@ prefer. Present exactly these two options:
 2. Extract the token string. Strip any surrounding quotes, whitespace,
    or a leading `Bearer` prefix before passing it to the cache script.
 
-3. Store the token in **two places** -- the credential cache AND a `.env.local`
-   file at the plugin root. Run both commands. Replace `<CLEANED_TOKEN>`
-   with the extracted JWT -- **do not** echo it back in visible output.
+3. Store the token. Run each of the following steps **exactly once** --
+   never re-run a step, even if it fails. Replace `<CLEANED_TOKEN>` with
+   the extracted JWT -- **do not** echo it back in visible output.
 
    **Step 3a** -- Write the credential cache (long-term storage):
 
@@ -55,32 +55,39 @@ prefer. Present exactly these two options:
    printf 'KUMIHO_AUTH_TOKEN=%s\n' '<CLEANED_TOKEN>' > "${CLAUDE_PLUGIN_ROOT}/.env.local"
    ```
 
-   If `CLAUDE_PLUGIN_ROOT` is not set, skip this step -- the credential
-   cache from step 3a is sufficient.
+   If `CLAUDE_PLUGIN_ROOT` is not set, skip this step.
+   If the filesystem is read-only, note the failure silently and move on.
 
    **Step 3c** -- Patch `.mcp.json` to trigger a Claude Desktop server
-   restart. In both Claude Code and Cowork, the MCP server process
-   persists across chat sessions. Simply caching the token to disk is
-   not enough -- the running process never picks it up. Writing the
-   token into `.mcp.json` causes the Claude app to detect the config
-   change and restart the MCP server automatically.
+   restart. The MCP server process persists across chat sessions; writing
+   the token into `.mcp.json` causes the Claude app to detect the config
+   change and restart the server automatically.
 
    ```bash
    python "${CLAUDE_PLUGIN_ROOT}/scripts/patch_mcp_json_token.py" --token "<CLEANED_TOKEN>"
    ```
 
    If `CLAUDE_PLUGIN_ROOT` is not set, fall back to a path relative to
-   the plugin directory. If this step fails, warn the user that they may
-   need to fully quit and relaunch Claude Desktop for the token to take
-   effect.
+   the plugin directory. If the filesystem is read-only, note the failure
+   silently and move on.
 
-4. **On success (all steps exit 0)**, tell the user:
-   - "Token stored. The Claude app should detect the config change and
-     restart the MCP server automatically. If memory tools still don't
-     connect, fully quit and relaunch the app."
+   **IMPORTANT**: Each step runs once. Do NOT retry any step. Do NOT
+   re-run a step "separately" if a different step failed.
 
-5. **On failure (non-zero exit)**, relay the error and ask the user to
-   double-check their token.
+4. **Report results concisely** -- one short summary, not a step-by-step
+   narration. Examples:
+
+   - All succeeded: "Token stored. The MCP server should restart
+     automatically. If memory tools still don't connect, fully quit and
+     relaunch the app."
+   - Cache succeeded but file writes failed (read-only FS): "Token cached
+     successfully. You may need to restart the app for the MCP server to
+     pick it up."
+   - Cache failed: relay the error and ask the user to double-check their
+     token.
+
+   Do NOT narrate individual step outcomes ("The .env.local write failed
+   due to..."). Just give the user the actionable summary.
 
 #### Method B -- CLI login
 
