@@ -8,6 +8,13 @@ argument-hint: "[token]"
 Authenticate the kumiho-memory plugin so that memory tools can connect to
 the Kumiho Cloud backend.
 
+## Prerequisites
+
+A **Kumiho Cloud account** is required. If the user says they don't have
+one, direct them to sign up at **[kumiho.io](https://kumiho.io)** (free tier available).
+Once signed up, they can mint an API token from the dashboard under
+**API Keys**, then come back and run `/kumiho-auth` again.
+
 ## Steps
 
 ### 1. Choose authentication method

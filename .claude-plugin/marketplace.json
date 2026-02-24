@@ -1,11 +1,11 @@
 {
   "name": "kumiho-claude",
   "owner": {
-    "name": "Kumiho Inc.",
+    "name": "Kumiho Clouds",
     "url": "https://kumiho.io"
   },
   "metadata": {
-    "description": "Marketplace for Kumiho Claude plugins."
+    "description": "Persistent graph-native memory for Claude — recalls context across sessions, stores decisions and preferences automatically."
   },
   "plugins": [
     {
