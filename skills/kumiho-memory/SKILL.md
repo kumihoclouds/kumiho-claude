@@ -31,7 +31,9 @@ very first user message of the session.  After that first turn it is
 **permanently done for this session**.
 
 - Do NOT call `kumiho_get_revision_by_tag` for `agent.instruction` again.
-- Do NOT greet the user again on subsequent turns.
+- Do NOT greet the user unless they greeted you first.  If their message
+  is a question or task, skip the greeting and answer directly.  Sessions
+  can pause and resume — a session start is NOT always a first meeting.
 - Do NOT re-check whether identity metadata is loaded — it already is.
 
 ---
