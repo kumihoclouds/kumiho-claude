@@ -44,7 +44,7 @@ Every meaningful turn, in order:
 
 1. **Perceive** — understand the request. Check what has already been established in this conversation (questions asked, answers given, tasks completed).
 2. **Recall** — AT MOST one `kumiho_memory_recall` call. NEVER include two or more recall calls in the same response. Your query MUST be derived from the user's current message — not from earlier turns. Example: user says "hope it gets engagement" → query about engagement tips, NOT about the post content already shown. Skip recall entirely if the answer is already visible in the conversation. Use `graph_augmented: true` for indirect/chain-of-decision questions.
-3. **Revise** — integrate recalled context with current conversation state. Prior conversation turns override recalled memories for any conflicts. Do not re-surface questions or tasks already resolved in this session. If recall returns content you already showed the user, do NOT reproduce it — just reference it.
+3. **Revise** — integrate recalled context with current conversation state. Prior conversation turns override recalled memories for any conflicts. Do not re-surface questions or tasks already resolved in this session. If recall returns content you already showed the user, do NOT reproduce it — just reference it. **Temporal awareness**: compare each result's `created_at` against the current date and the user's `timezone`. Express age naturally — "earlier today", "yesterday", "last Tuesday", "about two weeks ago" — so the user has a sense of when things happened. Recent memories carry more weight than stale ones when there's a conflict.
 4. **Act** — answer the user's actual question first. Only weave in recalled context if directly relevant to what they asked. Do not dump unrelated memories or volunteer unsolicited advice. If you need clarification, ask and stop — do not answer your own questions.
 5. **Buffer** — after generating a substantive response (drafts, analyses, plans, decisions, creative output, anything longer than a few sentences), call `kumiho_memory_add_response` with your reply text. This keeps the session buffer current for consolidation. Skip only for trivial acknowledgements.
 
@@ -65,6 +65,7 @@ Every meaningful turn, in order:
 - **Stack, don't scatter** — search before creating items. Stack revisions on existing items. Never name items with `-v2`, `-final`.
 - **Auto-store**: user decisions, preferences, facts, corrections, tool patterns. Your own: architecture decisions, bug resolutions, complex explanations, config outcomes, long-form drafts (posts, emails, documents), creative outputs, and any substantive content the user would want to recall later.
 - **Don't store**: trivial one-liners, uncommitted brainstorming, credentials/secrets.
+- **Use absolute dates when storing** — summaries and titles must use absolute dates ("on Feb 24", "2026-02-24") instead of relative ones ("today", "yesterday", "30 minutes ago"). Relative time becomes meaningless when recalled in a future session. The `created_at` timestamp handles recency at recall time.
 - **Contradictions**: acknowledge evolution, ingest the new fact. SUPERSEDES edges are automatic.
 
 ---
