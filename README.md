@@ -3,7 +3,7 @@
 Persistent graph-native memory plugin for Claude. Runs a local Kumiho MCP
 server with `kumiho-memory` so Claude **remembers you across sessions**.
 
-Version: **0.7.0** | Requires: `kumiho>=0.9.7`, `kumiho-memory>=0.3.0`
+Version: **0.7.5** | Requires: `kumiho>=0.9.7`, `kumiho-memory>=0.3.0`
 
 ## What it does
 

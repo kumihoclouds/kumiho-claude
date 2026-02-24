@@ -20,7 +20,7 @@ kumiho_get_revision_by_tag(
 ## Step 2 — Returning user greeting
 
 1. Parse metadata, adopt agent identity and communication style
-2. `kumiho_memory_recall` with broad query (user's name, role, recent topics)
+2. `kumiho_memory_recall` **once** with a broad query (user's name, role, recent topics). This is the ONLY recall for the first turn — do not call recall again.
 3. Greet with continuity — reference something specific from memory. Never narrate the bootstrap.
 
 ## Identity Metadata Fields
