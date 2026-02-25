@@ -834,6 +834,16 @@ def main() -> int:
         return _run([str(python_path), "-c", check_code], check=False)
 
     cmd = [str(python_path), "-m", "kumiho.mcp_server", *passthrough]
+    # On Windows os.execv spawns a new process and immediately exits the
+    # current one.  Claude Desktop monitors the original PID; when it exits
+    # the transport is closed ~85 ms later even though the child is still
+    # running.  subprocess.run keeps this process alive (waiting) so Claude
+    # Desktop never detects a premature exit.  stdin/stdout/stderr are
+    # inherited by the child automatically (no redirection needed).
+    if os.name == "nt":
+        proc = subprocess.run(cmd)
+        return proc.returncode
+    # On POSIX, true exec replaces the process image in-place (same PID).
     os.execv(str(python_path), cmd)
     return 0
 
