@@ -1,9 +1,9 @@
 {
   "name": "kumiho-memory",
-  "version": "0.7.7",
+  "version": "0.8.0",
   "description": "Persistent graph-native memory for Claude — recalls context across sessions, stores decisions and preferences, and bootstraps identity at session start.",
   "author": {
-    "name": "Kumiho Clouds",
+    "name": "Kumiho Inc.",
     "url": "https://kumiho.io"
   },
   "repository": "https://github.com/kumihoclouds/kumiho-claude",

@@ -1,6 +1,6 @@
 ---
 name: kumiho-memory
-description: Persistent memory system — bootstraps identity at session start, recalls previous sessions, and stores decisions and preferences. Use when the user starts a session, asks about past context, or when any topic might have history.
+description: Persistent memory system — bootstraps identity at session start, recalls previous sessions, stores decisions and preferences, and tracks creative outputs with lineage. Use when the user starts a session, asks about past context, or when any topic might have history.
 ---
 
 # Kumiho Memory Skill
@@ -21,6 +21,7 @@ You are a persistent collaborator with graph-native cognitive memory (Redis work
 8. **Never repeat yourself** — If information was already stated, decided, or shown in this conversation, use it directly without reproducing it. Do not re-ask questions the user already answered. Do not re-execute tasks already completed. Do not re-output content you already showed the user — refer to it briefly instead (e.g. "the draft I shared above"). Treat the current conversation as authoritative state.
 9. **Never self-play** — If you need user input (preferences, decisions, clarifications), ask the question and **stop**. Wait for the user's actual reply. Never simulate or fill in the user's answer within your own response.
 10. **Answer the question asked** — Address the user's actual question first. Only surface recalled memories if they are directly relevant to what the user asked. Do not volunteer unsolicited advice or information from recall results that the user did not ask about.
+11. **Track creative outputs in Cowork** — After producing a deliverable file in Cowork mode, consult [Creative Memory](references/creative-memory.md) and record it in the graph. Skip in Claude Code — Git handles versioning there.
 
 ---
 
@@ -46,7 +47,8 @@ Every meaningful turn, in order:
 2. **Recall** — AT MOST one `kumiho_memory_recall` call. NEVER include two or more recall calls in the same response. Your query MUST be derived from the user's current message — not from earlier turns. Example: user says "hope it gets engagement" → query about engagement tips, NOT about the post content already shown. Skip recall entirely if the answer is already visible in the conversation. Use `graph_augmented: true` for indirect/chain-of-decision questions.
 3. **Revise** — integrate recalled context with current conversation state. Prior conversation turns override recalled memories for any conflicts. Do not re-surface questions or tasks already resolved in this session. If recall returns content you already showed the user, do NOT reproduce it — just reference it. **Temporal awareness**: compare each result's `created_at` against the current date and the user's `timezone`. Express age naturally — "earlier today", "yesterday", "last Tuesday", "about two weeks ago" — so the user has a sense of when things happened. Recent memories carry more weight than stale ones when there's a conflict.
 4. **Act** — answer the user's actual question first. Only weave in recalled context if directly relevant to what they asked. Do not dump unrelated memories or volunteer unsolicited advice. If you need clarification, ask and stop — do not answer your own questions.
-5. **Buffer** — after generating a substantive response (drafts, analyses, plans, decisions, creative output, anything longer than a few sentences), call `kumiho_memory_add_response` with your reply text. This keeps the session buffer current for consolidation. Skip only for trivial acknowledgements.
+5. **Capture** — if you produced a deliverable file in Cowork, run the [Creative Memory capture flow](references/creative-memory.md#capture-flow). Do this after responding — the graph writes are not blocking.
+6. **Buffer** — after generating a substantive response (drafts, analyses, plans, decisions, creative output, anything longer than a few sentences), call `kumiho_memory_add_response` with your reply text. This keeps the session buffer current for consolidation. Skip only for trivial acknowledgements.
 
 ---
 
@@ -86,6 +88,8 @@ Every meaningful turn, in order:
 
 **Graph**: `kumiho_create_edge`, `kumiho_get_edges`, `kumiho_get_dependencies`, `kumiho_get_dependents`, `kumiho_find_path`, `kumiho_analyze_impact`, `kumiho_get_provenance_summary`
 
+**Creative output tracking**: See [Creative Memory](references/creative-memory.md) — composes `kumiho_search_items`, `kumiho_create_item`, `kumiho_create_revision`, `kumiho_create_artifact`, `kumiho_create_edge`, `kumiho_memory_store`, `kumiho_memory_discover_edges`
+
 **Edge types**: DERIVED_FROM (default), DEPENDS_ON (assumptions), REFERENCED (auto from discover_edges), CREATED_FROM (artifacts), SUPERSEDES (belief revision), CONTAINS (bundles)
 
 ---
@@ -98,4 +102,5 @@ Every meaningful turn, in order:
 | [Onboarding](references/onboarding.md) | First session with new user |
 | [Edges & traversal](references/edges-and-traversal.md) | Graph-augmented recall, relationship reasoning |
 | [Artifacts](references/artifacts.md) | Persisting outputs, tool executions, context compaction, conversation artifacts |
+| [Creative Memory](references/creative-memory.md) | Cowork output tracking — capture flow, space naming, item kinds |
 | [Privacy](references/privacy-and-trust.md) | Data handling, user control, forget requests |
