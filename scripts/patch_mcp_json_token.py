@@ -225,7 +225,8 @@ def _patch_config_file(config_path: Path, token: str, *, bootstrap: bool = False
             return False
         # Bootstrap: create the server entry with absolute paths.
         servers = body.setdefault("mcpServers", {})
-        server = _build_bootstrap_server_entry(_plugin_root())
+        # Use actual script location, not CLAUDE_PLUGIN_ROOT env which may be stale.
+        server = _build_bootstrap_server_entry(Path(__file__).resolve().parents[1])
         servers["kumiho-memory"] = server
         print(
             f"[kumiho-claude] Bootstrapped kumiho-memory server entry in {config_path.name}.",

@@ -497,8 +497,13 @@ def _bootstrap_desktop_server_entries() -> None:
     Writes absolute paths (no ``${...}`` templates) so Claude Desktop can
     launch the server without shell variable resolution.  Called on every
     startup so the config self-heals if the entry was wiped or never created.
+
+    Uses the actual running script location (``__file__``) rather than
+    ``CLAUDE_PLUGIN_ROOT`` env because the env variable may point to a
+    non-versioned or stale path.
     """
-    plugin_root = _plugin_root()
+    # Always derive plugin root from the actual running script, not env.
+    plugin_root = Path(__file__).resolve().parents[1]
     script_path = plugin_root / "scripts" / "run_kumiho_mcp.py"
     if not script_path.exists():
         return  # Not in a standard plugin layout; skip.
@@ -530,11 +535,24 @@ def _bootstrap_desktop_server_entries() -> None:
         except Exception:
             continue
 
-        # Check if already configured.
-        servers = body.get("mcpServers") if isinstance(body, dict) else None
-        if isinstance(servers, dict):
-            if any(name in servers for name in ("kumiho-memory", "kumiho")):
-                continue  # This config path is fine; check the next one.
+        # Check if already configured *with a valid script path*.
+        # If the entry exists but points to a missing file (e.g. stale version
+        # path), fall through and overwrite it with the correct paths.
+        def _has_valid_entry(b: dict) -> bool:
+            servers = b.get("mcpServers")
+            if not isinstance(servers, dict):
+                return False
+            for name in ("kumiho-memory", "kumiho"):
+                entry = servers.get(name)
+                if not isinstance(entry, dict):
+                    continue
+                args = entry.get("args") or []
+                if args and Path(args[0]).exists():
+                    return True
+            return False
+
+        if _has_valid_entry(body):
+            continue  # Valid entry — skip.
 
         # Not configured — bootstrap the entry.
         body.setdefault("mcpServers", {})["kumiho-memory"] = server_entry
