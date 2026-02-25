@@ -20,7 +20,7 @@ from pathlib import Path
 
 DEFAULT_PACKAGE_SPEC = "kumiho[mcp]>=0.9.7 kumiho-memory[all]>=0.3.1"
 MARKER_FILE = ".installed-packages.txt"
-DEFAULT_DISCOVERY_USER_AGENT = "kumiho-claude/0.7.7"
+DEFAULT_DISCOVERY_USER_AGENT = "kumiho-claude/0.8.1"
 
 
 def _state_dir() -> Path:
@@ -491,6 +491,67 @@ def _try_sync_token_to_config(config_path: Path, token: str) -> bool:
         return False
 
 
+def _bootstrap_desktop_server_entries() -> None:
+    """Ensure Claude Desktop configs have a kumiho-memory server entry.
+
+    Writes absolute paths (no ``${...}`` templates) so Claude Desktop can
+    launch the server without shell variable resolution.  Called on every
+    startup so the config self-heals if the entry was wiped or never created.
+    """
+    plugin_root = _plugin_root()
+    script_path = plugin_root / "scripts" / "run_kumiho_mcp.py"
+    if not script_path.exists():
+        return  # Not in a standard plugin layout; skip.
+
+    venv_py = _venv_python(_state_dir() / "venv")
+    command = str(venv_py) if venv_py.exists() else sys.executable
+
+    server_entry: dict = {
+        "command": command,
+        "args": [str(script_path)],
+        "env": {
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        },
+    }
+    # Include the resolved token if one is available so Claude Desktop picks
+    # it up immediately on the next restart (no extra /kumiho-auth step needed).
+    token = _clean_token_candidate((os.getenv("KUMIHO_AUTH_TOKEN", "") or "").strip())
+    if token and not _looks_like_placeholder(token):
+        server_entry["env"]["KUMIHO_AUTH_TOKEN"] = token
+
+    for desktop_path in _claude_desktop_config_paths():
+        try:
+            if desktop_path.exists():
+                body = json.loads(desktop_path.read_text(encoding="utf-8"))
+                if not isinstance(body, dict):
+                    body = {}
+            else:
+                body = {}
+        except Exception:
+            continue
+
+        # Check if already configured.
+        servers = body.get("mcpServers") if isinstance(body, dict) else None
+        if isinstance(servers, dict):
+            if any(name in servers for name in ("kumiho-memory", "kumiho")):
+                continue  # This config path is fine; check the next one.
+
+        # Not configured — bootstrap the entry.
+        body.setdefault("mcpServers", {})["kumiho-memory"] = server_entry
+        try:
+            desktop_path.parent.mkdir(parents=True, exist_ok=True)
+            desktop_path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+            print(
+                f"[kumiho-claude] Bootstrapped kumiho-memory server entry in {desktop_path.name}.",
+                file=sys.stderr,
+            )
+        except Exception as exc:
+            print(
+                f"[kumiho-claude] Could not write {desktop_path}: {exc}",
+                file=sys.stderr,
+            )
+
+
 def _sync_token_to_mcp_json() -> None:
     """Write the resolved token into MCP config so Claude Desktop picks it up.
 
@@ -726,6 +787,7 @@ def main() -> int:
 
     _sanitize_placeholder_env_vars()
     _hydrate_env_from_local_config()
+    _bootstrap_desktop_server_entries()
     _sync_token_to_mcp_json()
     _validate_auth_token()
     _warn_auth()

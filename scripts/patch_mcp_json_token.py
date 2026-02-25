@@ -31,6 +31,43 @@ import os
 import sys
 from pathlib import Path
 
+
+def _state_dir() -> Path:
+    override = os.getenv("KUMIHO_CLAUDE_HOME", "").strip()
+    if override:
+        return Path(override).expanduser()
+    if os.name == "nt":
+        base = os.getenv("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+        return Path(base) / "kumiho-claude"
+    xdg = os.getenv("XDG_CACHE_HOME", "").strip()
+    if xdg:
+        return Path(xdg) / "kumiho-claude"
+    return Path.home() / ".cache" / "kumiho-claude"
+
+
+def _venv_python(venv_dir: Path) -> Path:
+    if os.name == "nt":
+        return venv_dir / "Scripts" / "python.exe"
+    return venv_dir / "bin" / "python"
+
+
+def _build_bootstrap_server_entry(plugin_root: Path) -> dict:
+    """Build an mcpServers entry for kumiho-memory with absolute paths.
+
+    Uses the managed venv Python when it exists; falls back to the current
+    interpreter so the bootstrap works even before the venv is created.
+    """
+    venv_py = _venv_python(_state_dir() / "venv")
+    command = str(venv_py) if venv_py.exists() else sys.executable
+    script = str(plugin_root / "scripts" / "run_kumiho_mcp.py")
+    return {
+        "command": command,
+        "args": [script],
+        "env": {
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        },
+    }
+
 # MCP server names to look for in config files.
 _SERVER_NAMES = ("kumiho-memory", "kumiho")
 
@@ -157,24 +194,43 @@ def _find_server_entry(body: dict) -> dict | None:
     return None
 
 
-def _patch_config_file(config_path: Path, token: str) -> bool:
+def _patch_config_file(config_path: Path, token: str, *, bootstrap: bool = False) -> bool:
     """Write *token* into the kumiho server env block of *config_path*.
 
-    Returns True on success, False on any error (missing file, no server
-    entry, read-only filesystem, etc.).
-    """
-    if not config_path.exists():
-        return False
+    When *bootstrap* is True and no server entry exists, a new entry is
+    created with absolute paths so Claude Desktop can launch the server
+    without shell variable resolution.  bootstrap=False preserves the old
+    behaviour (return False when no entry exists) so the plugin-local
+    ``.mcp.json`` is never silently rewritten.
 
-    try:
-        body = json.loads(config_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        print(f"Error reading {config_path}: {exc}", file=sys.stderr)
+    Returns True on success, False on any error (missing file, read-only
+    filesystem, etc.).
+    """
+    if config_path.exists():
+        try:
+            body = json.loads(config_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print(f"Error reading {config_path}: {exc}", file=sys.stderr)
+            return False
+        if not isinstance(body, dict):
+            body = {}
+    elif bootstrap:
+        body = {}
+    else:
         return False
 
     server = _find_server_entry(body)
     if server is None:
-        return False
+        if not bootstrap:
+            return False
+        # Bootstrap: create the server entry with absolute paths.
+        servers = body.setdefault("mcpServers", {})
+        server = _build_bootstrap_server_entry(_plugin_root())
+        servers["kumiho-memory"] = server
+        print(
+            f"[kumiho-claude] Bootstrapped kumiho-memory server entry in {config_path.name}.",
+            file=sys.stderr,
+        )
 
     env = server.get("env")
     if not isinstance(env, dict):
@@ -185,6 +241,7 @@ def _patch_config_file(config_path: Path, token: str) -> bool:
     env["KUMIHO_AUTH_TOKEN"] = token
 
     try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
     except Exception as exc:
         print(f"Error writing {config_path}: {exc}", file=sys.stderr)
@@ -213,9 +270,9 @@ def patch_mcp_json(token: str) -> bool:
     if _patch_config_file(plugin_path, token):
         return True
 
-    # 2. Fallback: Claude Desktop global config
+    # 2. Fallback: Claude Desktop global config (bootstrap entry if missing)
     for desktop_path in _claude_desktop_config_paths():
-        if _patch_config_file(desktop_path, token):
+        if _patch_config_file(desktop_path, token, bootstrap=True):
             return True
 
     print(
